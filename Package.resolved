@@ -1,0 +1,42 @@
+{
+  "originHash" : "562c5e370ca8507cfa959180d13c13278733b78743207e833e6246bc2ec23c2f",
+  "pins" : [
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift.git",
+      "state" : {
+        "revision" : "36e30a6f1ef10e4194f6af0cff90888526f0c115",
+        "version" : "7.10.0"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream.git",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "e9b514360b46276ea54e535fddf4cb1ae2942c44",
+        "version" : "604.0.0-prerelease-2026-03-31"
+      }
+    },
+    {
+      "identity" : "swift-testing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-testing.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "a03f5ec51f69027aa5b7d85bf25f62a39a66f7aa"
+      }
+    }
+  ],
+  "version" : 3
+}

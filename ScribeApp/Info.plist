@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Scribe</string>
+    <key>CFBundleDisplayName</key>
+    <string>Scribe</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.scribe.app</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Scribe needs microphone access to capture meeting audio for transcription.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Scribe needs screen recording permission to capture system audio from meeting apps.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Scribe uses your calendar to detect upcoming meetings and auto-start recording.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Scribe uses your calendar to detect upcoming meetings and auto-start recording.</string>
+</dict>
+</plist>
