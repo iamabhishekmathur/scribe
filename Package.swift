@@ -8,6 +8,8 @@ let package = Package(
     ],
     products: [
         .executable(name: "Scribe", targets: ["ScribeApp"]),
+        .executable(name: "scribe-mcp", targets: ["ScribeMCP"]),
+        .executable(name: "scribe-cli", targets: ["ScribeCLI"]),
         .library(name: "ScribeCore", targets: ["ScribeCore"]),
         .library(name: "ScribeUI", targets: ["ScribeUI"]),
     ],
@@ -41,6 +43,16 @@ let package = Package(
             name: "ScribeUI",
             dependencies: ["ScribeCore"],
             path: "ScribeUI"
+        ),
+        .executableTarget(
+            name: "ScribeMCP",
+            dependencies: ["ScribeCore"],
+            path: "ScribeMCP"
+        ),
+        .executableTarget(
+            name: "ScribeCLI",
+            dependencies: ["ScribeCore"],
+            path: "ScribeCLI"
         ),
         .testTarget(
             name: "ScribeTests",
