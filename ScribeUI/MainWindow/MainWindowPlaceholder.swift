@@ -12,6 +12,12 @@ public struct MainWindowPlaceholder: View {
     @State private var editingFolderName = ""
     @State private var settingsSection: SettingsSection = .general
 
+    private static let toolbarDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f
+    }()
+
     enum SidebarItem: Hashable {
         case allMeetings
         case search
@@ -97,6 +103,33 @@ public struct MainWindowPlaceholder: View {
                 SettingsDetailView(appState: appState, selectedSection: $settingsSection)
             }
         }
+        .toolbar {
+            // Hidden keyboard shortcut buttons
+            ToolbarItem(placement: .automatic) {
+                HStack(spacing: 0) {
+                    Button("Search") { sidebarItem = .search }
+                        .keyboardShortcut("f", modifiers: .command)
+                        .hidden()
+                    Button("Settings") { sidebarItem = .settings }
+                        .keyboardShortcut(",", modifiers: .command)
+                        .hidden()
+                }
+                .frame(width: 0, height: 0)
+                .clipped()
+            }
+
+            // Keyboard shortcut only (hidden) — actual button is in MeetingListView
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    startNewMeeting()
+                } label: {
+                    EmptyView()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .frame(width: 0, height: 0)
+                .clipped()
+            }
+        }
         .frame(minWidth: 950, minHeight: 550)
         .onReceive(NotificationCenter.default.publisher(for: .meetingDeleted)) { _ in
             selectedMeetingId = nil
@@ -113,6 +146,35 @@ public struct MainWindowPlaceholder: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettingsWindow)) { _ in
             sidebarItem = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .startNewMeeting)) { notification in
+            if let info = notification.object as? [String: Any],
+               let meetingId = info["meetingId"] as? UUID,
+               let title = info["title"] as? String {
+                appState.startRecording(meetingId: meetingId)
+                Task {
+                    await RecordingCoordinator.shared.startRecording(meetingId: meetingId, title: title)
+                }
+                NotificationCenter.default.post(name: .openMainWindow, object: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    NotificationCenter.default.post(name: .openMeeting, object: meetingId)
+                }
+            }
+        }
+    }
+
+    // MARK: - Start New Meeting
+
+    private func startNewMeeting() {
+        let meetingId = UUID()
+        let title = "Meeting " + Self.toolbarDateFormatter.string(from: Date())
+        appState.startRecording(meetingId: meetingId)
+        Task {
+            await RecordingCoordinator.shared.startRecording(meetingId: meetingId, title: title)
+        }
+        NotificationCenter.default.post(name: .openMainWindow, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: .openMeeting, object: meetingId)
         }
     }
 
@@ -204,6 +266,7 @@ public struct MainWindowPlaceholder: View {
 
 public extension Notification.Name {
     static let foldersChanged = Notification.Name("com.scribe.foldersChanged")
+    static let startNewMeeting = Notification.Name("com.scribe.startNewMeeting")
 }
 
 // MARK: - Settings Section Enum (shared between sidebar list and detail)

@@ -20,16 +20,22 @@ public struct SettingsDetailView: View {
                 switch selectedSection {
                 case .general:
                     GeneralSettingsContent(settings: settings)
+                        .transition(.opacity)
                 case .transcription:
                     TranscriptionSettingsContent(settings: settings)
+                        .transition(.opacity)
                 case .llm:
                     LLMSettingsContent(settings: settings)
+                        .transition(.opacity)
                 case .calendar:
                     CalendarSettingsContent(settings: settings)
+                        .transition(.opacity)
                 case .permissions:
                     PermissionsSettingsContent(permissions: permissions)
+                        .transition(.opacity)
                 }
             }
+            .animation(Anim.standard, value: selectedSection)
             .padding(24)
         }
         .task {

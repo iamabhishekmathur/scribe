@@ -1,11 +1,12 @@
 import AppKit
+import UserNotifications
 import ScribeCore
 import os
 
 private let logger = Logger(subsystem: "com.scribe.app", category: "AppDelegate")
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var detectionTask: Task<Void, Never>?
     private var calendarRefreshTask: Task<Void, Never>?
 
@@ -45,9 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.error("Failed to start API server: \(error.localizedDescription)")
             }
 
-            // Register notification categories
+            // Register notification categories and set delegate
             if Bundle.main.bundleIdentifier != nil {
                 await MeetingDetector.registerNotificationCategories()
+                UNUserNotificationCenter.current().delegate = self
             }
 
             // Sync Google Calendar at startup — always refresh token first
@@ -130,9 +132,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for await event in events {
                 guard !Task.isCancelled else { break }
                 switch event {
-                case .calendarEvent(let title, _, _, _):
+                case .calendarEvent(let title, let eventId, let meetingURL, let participants, let startDate):
                     logger.info("Meeting detected (calendar): \(title)")
-                    await showMeetingAlert(title: "Meeting Starting", body: title)
+                    await showCalendarMeetingAlert(
+                        title: title,
+                        eventId: eventId,
+                        meetingURL: meetingURL,
+                        participants: participants,
+                        startDate: startDate
+                    )
                 case .appLaunched(let appName, _):
                     logger.info("Meeting started in \(appName)")
                     await showMeetingAlert(title: "Meeting in \(appName)", body: "Start scribing?")
@@ -154,6 +162,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("Meeting detection started")
     }
 
+    /// Show a rich notification banner for calendar-detected meetings
+    @MainActor
+    private func showCalendarMeetingAlert(
+        title: String,
+        eventId: String,
+        meetingURL: String?,
+        participants: [String],
+        startDate: Date
+    ) {
+        guard !RecordingCoordinator.shared.isRecording else {
+            logger.info("Skipping meeting alert — already scribing")
+            return
+        }
+
+        let timeText = formatTimeUntil(startDate)
+        let subtitle = participants.isEmpty ? "" : "with \(participants.count) attendee\(participants.count == 1 ? "" : "s")"
+
+        // Post system notification (respects DND, persists in Notification Center)
+        postSystemNotification(title: title, body: "\(timeText) \(subtitle)".trimmingCharacters(in: .whitespaces), meetingTitle: title)
+
+        if let urlString = meetingURL, let url = URL(string: urlString) {
+            ScribeNotificationBanner.show(
+                title: title,
+                subtitle: subtitle,
+                timeText: timeText,
+                primaryTitle: "Join & Scribe",
+                primaryAction: {
+                    // Open the meeting URL (Zoom/Meet/Teams)
+                    NSWorkspace.shared.open(url)
+                    let meetingId = UUID()
+                    Task {
+                        await RecordingCoordinator.shared.startRecording(meetingId: meetingId, title: title)
+                        NotificationCenter.default.post(name: .openMainWindow, object: nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(name: .openMeeting, object: meetingId)
+                        }
+                    }
+                },
+                secondaryTitle: "Just Scribe",
+                secondaryAction: {
+                    let meetingId = UUID()
+                    Task {
+                        await RecordingCoordinator.shared.startRecording(meetingId: meetingId, title: title)
+                        NotificationCenter.default.post(name: .openMainWindow, object: nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(name: .openMeeting, object: meetingId)
+                        }
+                    }
+                }
+            )
+        } else {
+            // No meeting URL — single action
+            showMeetingAlert(title: title, body: subtitle.isEmpty ? "Start scribing?" : subtitle)
+        }
+    }
+
     /// Show a floating notification banner in the top-right (like Zoom/Granola)
     @MainActor
     private func showMeetingAlert(title: String, body: String) {
@@ -162,6 +226,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.info("Skipping meeting alert — already scribing")
             return
         }
+
+        // Post system notification (respects DND, persists in Notification Center)
+        postSystemNotification(title: title, body: body, meetingTitle: title)
 
         ScribeNotificationBanner.show(title: title, subtitle: body, actionTitle: "Start Scribing") {
             let meetingId = UUID()
@@ -173,6 +240,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NotificationCenter.default.post(name: .openMeeting, object: meetingId)
                 }
             }
+        }
+    }
+
+    // MARK: - System Notification Center
+
+    /// Post a system notification alongside the custom banner (respects DND, appears in Notification Center)
+    private func postSystemNotification(title: String, body: String, meetingTitle: String? = nil) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.categoryIdentifier = "MEETING_DETECTED"
+        content.sound = .default
+        if let meetingTitle {
+            content.userInfo["meetingTitle"] = meetingTitle
+        }
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        let title = userInfo["meetingTitle"] as? String ?? "Meeting"
+
+        if response.actionIdentifier == "START_RECORDING" {
+            Task { @MainActor in
+                let meetingId = UUID()
+                await RecordingCoordinator.shared.startRecording(meetingId: meetingId, title: title)
+                NotificationCenter.default.post(name: .openMainWindow, object: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: .openMeeting, object: meetingId)
+                }
+            }
+        }
+        completionHandler()
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show system notification even when app is frontmost (banner + sound)
+        completionHandler([.banner, .sound])
+    }
+
+    /// Format the time remaining until meeting start
+    private func formatTimeUntil(_ date: Date) -> String {
+        let seconds = date.timeIntervalSinceNow
+        if seconds <= 0 {
+            return "Starting now"
+        } else if seconds < 60 {
+            return "Starting in <1 min"
+        } else {
+            let minutes = Int(seconds / 60)
+            return "Starting in \(minutes) min"
         }
     }
 }

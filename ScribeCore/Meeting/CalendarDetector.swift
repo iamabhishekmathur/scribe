@@ -1,7 +1,7 @@
 import EventKit
 import Foundation
 
-/// Detects upcoming meetings from the local calendar (EventKit).
+/// Detects upcoming meetings from the local calendar (EventKit) and Google Calendar.
 /// Looks for events with video call URLs starting within a configurable window.
 public actor CalendarDetector {
     private let eventStore = EKEventStore()
@@ -24,7 +24,7 @@ public actor CalendarDetector {
     }
 
     /// Start polling for upcoming meetings. Yields detected meetings via the returned stream.
-    public func start(pollInterval: TimeInterval = 30) -> AsyncStream<DetectedMeeting> {
+    public func start(pollInterval: TimeInterval = 20) -> AsyncStream<DetectedMeeting> {
         AsyncStream { continuation in
             self.pollTask = Task { [weak self] in
                 while !Task.isCancelled {
@@ -46,10 +46,29 @@ public actor CalendarDetector {
         pollTask = nil
     }
 
-    private func checkUpcomingMeetings() -> [DetectedMeeting] {
-        // Skip EventKit for unsigned apps — causes CADatabase error spam
-        guard Bundle.main.bundleIdentifier != nil else { return [] }
+    private func checkUpcomingMeetings() async -> [DetectedMeeting] {
+        var detected: [DetectedMeeting] = []
 
+        // 1. EventKit (local macOS Calendar) — only works with bundled .app
+        if Bundle.main.bundleIdentifier != nil {
+            detected.append(contentsOf: checkEventKit())
+        }
+
+        // 2. Google Calendar — works regardless of bundle identifier
+        let googleMeetings = await checkGoogleCalendar()
+        for gm in googleMeetings {
+            let key = "\(gm.title)-\(Int(gm.startDate.timeIntervalSince1970))"
+            guard !detectedEventIds.contains(key) else { continue }
+            detectedEventIds.insert(key)
+            detected.append(gm)
+        }
+
+        return detected
+    }
+
+    // MARK: - EventKit
+
+    private func checkEventKit() -> [DetectedMeeting] {
         let now = Date()
         let lookAhead = now.addingTimeInterval(lookAheadMinutes * 60)
 
@@ -65,13 +84,9 @@ public actor CalendarDetector {
         for event in events {
             let eventId = event.eventIdentifier ?? UUID().uuidString
 
-            // Skip already-detected events
             guard !detectedEventIds.contains(eventId) else { continue }
 
-            // Check if this event has a video call URL
             let meetingURL = extractMeetingURL(from: event)
-
-            // Only detect events that look like meetings (have URL or multiple attendees)
             let attendeeCount = event.attendees?.count ?? 0
             guard meetingURL != nil || attendeeCount > 1 else { continue }
 
@@ -85,6 +100,33 @@ public actor CalendarDetector {
                 eventId: eventId,
                 meetingURL: meetingURL,
                 participants: participants
+            ))
+        }
+
+        return detected
+    }
+
+    // MARK: - Google Calendar
+
+    private func checkGoogleCalendar() async -> [DetectedMeeting] {
+        let meetings = await CalendarManager.shared.getUpcomingMeetings(minutes: Int(lookAheadMinutes))
+        var detected: [DetectedMeeting] = []
+
+        for meeting in meetings {
+            let key = "google-\(meeting.id)"
+            guard !detectedEventIds.contains(key) else { continue }
+
+            let attendeeCount = meeting.attendees.count
+            guard meeting.meetingURL != nil || attendeeCount > 1 else { continue }
+
+            detectedEventIds.insert(key)
+
+            detected.append(DetectedMeeting(
+                title: meeting.title,
+                startDate: meeting.startDate,
+                eventId: meeting.id,
+                meetingURL: meeting.meetingURL,
+                participants: meeting.attendees
             ))
         }
 

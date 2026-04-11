@@ -45,12 +45,16 @@ public struct OnboardingView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding()
+            .transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            ))
 
             // Navigation
             HStack {
                 if currentStep != .welcome {
                     Button("Back") {
-                        withAnimation {
+                        withAnimation(Anim.panel) {
                             currentStep = OnboardingStep(rawValue: currentStep.rawValue - 1) ?? .welcome
                         }
                     }
@@ -64,7 +68,7 @@ public struct OnboardingView: View {
                     .buttonStyle(.borderedProminent)
                 } else {
                     Button("Next") {
-                        withAnimation {
+                        withAnimation(Anim.panel) {
                             currentStep = OnboardingStep(rawValue: currentStep.rawValue + 1) ?? .complete
                         }
                     }
@@ -255,6 +259,7 @@ struct OnboardingPermissionRow: View {
             if granted {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+                    .transition(.scale.combined(with: .opacity))
             } else {
                 Button("Grant") { action() }
                     .buttonStyle(.bordered)
@@ -264,5 +269,6 @@ struct OnboardingPermissionRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+        .animation(Anim.standard, value: granted)
     }
 }

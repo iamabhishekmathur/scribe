@@ -27,6 +27,10 @@ public struct AIChatView: View {
                         ForEach(messages) { message in
                             ChatBubble(message: message)
                                 .id(message.id)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
                         }
                         if isLoading {
                             HStack(spacing: 4) {
@@ -105,7 +109,9 @@ public struct AIChatView: View {
     }
 
     private func askQuestion(_ question: String) {
-        messages.append(ChatMessage(role: .user, content: question))
+        withAnimation(Anim.panel) {
+            messages.append(ChatMessage(role: .user, content: question))
+        }
         isLoading = true
 
         Task {
@@ -113,10 +119,12 @@ public struct AIChatView: View {
             // For now, placeholder response
             try? await Task.sleep(for: .milliseconds(500))
             await MainActor.run {
-                messages.append(ChatMessage(
-                    role: .assistant,
-                    content: "AI chat will be connected in Phase 6 (AI Features). This will use your configured LLM with the live transcript as context."
-                ))
+                withAnimation(Anim.panel) {
+                    messages.append(ChatMessage(
+                        role: .assistant,
+                        content: "AI chat will be connected in Phase 6 (AI Features). This will use your configured LLM with the live transcript as context."
+                    ))
+                }
                 isLoading = false
             }
         }
@@ -157,6 +165,7 @@ struct ChatBubble: View {
 struct QuickActionButton: View {
     let title: String
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -164,8 +173,10 @@ struct QuickActionButton: View {
                 .font(.caption2)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.quaternary, in: Capsule())
+                .background(isHovered ? Color.primary.opacity(0.08) : Color.secondary.opacity(0.12), in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScribeButtonStyle())
+        .onHover { isHovered = $0 }
+        .animation(Anim.fast, value: isHovered)
     }
 }

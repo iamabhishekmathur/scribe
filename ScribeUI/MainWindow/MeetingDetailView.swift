@@ -6,7 +6,6 @@ import ScribeCore
 public struct MeetingDetailView: View {
     let meetingId: UUID
     @State private var meeting: MeetingRecord?
-    @State private var isEditingTitle = false
     @State private var editedTitle = ""
     @State private var showTranscript = false
     @State private var noteContent = ""
@@ -20,6 +19,8 @@ public struct MeetingDetailView: View {
     @State private var summaries: [AISummary] = []
     @State private var transcriptPollTask: Task<Void, Never>?
     @State private var detailFolders: [Folder] = []
+    @State private var transcriptHeight: CGFloat = 250
+    @FocusState private var titleFieldFocused: Bool
 
     @ObservedObject private var coordinator = RecordingCoordinator.shared
 
@@ -44,13 +45,20 @@ public struct MeetingDetailView: View {
                 // Main content
                 ZStack(alignment: .bottom) {
                     VStack(spacing: 0) {
-                        if isSummarizing {
-                            summarizingView
-                        } else if isComplete && !summaries.isEmpty {
-                            processedSummaryView
-                        } else {
-                            notesEditor
+                        Group {
+                            if isSummarizing {
+                                summarizingView
+                                    .transition(.opacity)
+                            } else if isComplete && !summaries.isEmpty {
+                                processedSummaryView
+                                    .transition(.opacity)
+                            } else {
+                                notesEditor
+                                    .transition(.opacity)
+                            }
                         }
+                        .animation(Anim.standard, value: isSummarizing)
+                        .animation(Anim.standard, value: isComplete)
                         Spacer()
                     }
 
@@ -77,27 +85,22 @@ public struct MeetingDetailView: View {
 
     private func meetingHeader(_ meeting: MeetingRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if isEditingTitle {
-                HStack {
-                    TextField("Meeting title", text: $editedTitle)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.title2, design: .serif).weight(.bold))
-                        .onSubmit { saveTitle() }
-                    Button("Save") { saveTitle() }.controlSize(.small)
-                    Button("Cancel") { editedTitle = meeting.title; isEditingTitle = false }.controlSize(.small)
+            TextField("Meeting title", text: $editedTitle)
+                .textFieldStyle(.plain)
+                .font(.system(.title2, design: .serif).weight(.bold))
+                .focused($titleFieldFocused)
+                .onSubmit { saveTitle() }
+                .onChange(of: titleFieldFocused) { focused in
+                    if !focused { saveTitle() }
                 }
-            } else {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(meeting.title)
-                        .font(.system(.title2, design: .serif))
-                        .fontWeight(.bold)
-                    Button { isEditingTitle = true } label: {
-                        Image(systemName: "pencil").font(.caption).foregroundStyle(.secondary)
+                .onHover { hovering in
+                    if hovering {
+                        NSCursor.iBeam.push()
+                    } else {
+                        NSCursor.pop()
                     }
-                    .buttonStyle(.plain)
-                    .help("Edit meeting title")
                 }
-            }
+                .accessibilityLabel("Meeting title, click to edit")
 
             HStack(spacing: 8) {
                 Label(formatDate(meeting.startTime), systemImage: "calendar")
@@ -125,61 +128,22 @@ public struct MeetingDetailView: View {
 
                 Spacer()
 
-                Menu {
-                    Button("Export as JSON") {
-                        Task {
-                            if let url = try? await JSONExporter.shared.exportMeeting(id: meetingId) {
-                                NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
-                            }
-                        }
-                    }
-                    if !detailFolders.isEmpty {
-                        Menu("Move to Folder") {
-                            ForEach(detailFolders) { folder in
-                                Button {
-                                    Task {
-                                        try? await MeetingStore.shared.moveMeetingToFolder(meetingId: meetingId, folderId: folder.id)
-                                        NotificationCenter.default.post(name: .meetingUpdated, object: nil)
-                                        await loadAll()
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(folder.name)
-                                        if meeting.folderId == folder.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                            if meeting.folderId != nil {
-                                Divider()
-                                Button("Remove from Folder") {
-                                    Task {
-                                        try? await MeetingStore.shared.moveMeetingToFolder(meetingId: meetingId, folderId: nil)
-                                        NotificationCenter.default.post(name: .meetingUpdated, object: nil)
-                                        await loadAll()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Divider()
-                    Button("Delete Meeting", role: .destructive) {
-                        Task {
-                            try? await MeetingStore.shared.deleteMeeting(id: meetingId)
-                            NotificationCenter.default.post(name: .meetingDeleted, object: meetingId)
-                        }
+                Button {
+                    Task {
+                        try? await MeetingStore.shared.deleteMeeting(id: meetingId)
+                        NotificationCenter.default.post(name: .meetingDeleted, object: meetingId)
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle").font(.body)
+                    Image(systemName: "trash").font(.body)
+                        .foregroundStyle(.secondary)
                 }
-                .menuStyle(.borderlessButton)
-                .frame(width: 24)
-                .help("Meeting options")
+                .buttonStyle(.plain)
+                .help("Delete meeting")
+                .accessibilityLabel("Delete meeting")
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Spacing.spacious)
+        .padding(.vertical, Spacing.standard)
     }
 
     // MARK: - Summarizing Loading State
@@ -209,8 +173,8 @@ public struct MeetingDetailView: View {
                     Text("Write your notes here...")
                         .font(.system(.title3, design: .serif))
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 24)
+                        .padding(.horizontal, Spacing.generous)
+                        .padding(.top, Spacing.generous)
                 }
 
                 TextEditor(text: $noteContent)
@@ -218,8 +182,8 @@ public struct MeetingDetailView: View {
                     .lineSpacing(5)
                     .scrollContentBackground(.hidden)
                     .frame(maxWidth: .infinity, minHeight: 400)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, Spacing.spacious)
+                    .padding(.vertical, Spacing.comfortable)
             }
         }
         .onChange(of: noteContent) { _ in debounceSaveNotes() }
@@ -257,7 +221,7 @@ public struct MeetingDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(24)
+            .padding(Spacing.generous)
             Spacer().frame(height: 80)
         }
     }
@@ -302,6 +266,10 @@ public struct MeetingDetailView: View {
                                 if msg.role == .assistant { Spacer(minLength: 60) }
                             }
                             .id(msg.id)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
                         if isChatLoading {
                             HStack(spacing: 6) {
@@ -322,23 +290,26 @@ public struct MeetingDetailView: View {
         .transition(.move(edge: .bottom))
     }
 
-    // MARK: - Transcript Panel
+    // MARK: - Transcript Panel (resizable)
 
     private var transcriptPanel: some View {
         VStack(spacing: 0) {
+            // Drag handle for resizing
+            transcriptDragHandle
+
             HStack {
                 Text("Transcript")
                     .font(.callout).fontWeight(.semibold)
                 Spacer()
                 Text("\(transcriptSegments.count) segments")
                     .font(.caption).foregroundStyle(.tertiary)
-                Button { withAnimation(.spring(duration: 0.3)) { showTranscript = false } } label: {
+                Button { withAnimation(Anim.panel) { showTranscript = false } } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Close transcript")
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
+            .padding(.horizontal, 16).padding(.vertical, 6)
 
             Divider()
 
@@ -355,26 +326,14 @@ public struct MeetingDetailView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 6) {
+                        LazyVStack(spacing: 4) {
                             ForEach(transcriptSegments) { seg in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text(formatTime(seg.startTime))
-                                        .font(.caption2.monospacedDigit())
-                                        .foregroundStyle(.tertiary)
-                                        .frame(width: 36, alignment: .trailing)
-                                    if let speaker = seg.speaker {
-                                        Text(speaker)
-                                            .font(.caption2).fontWeight(.semibold)
-                                            .foregroundStyle(.blue)
-                                    }
-                                    Text(seg.text)
-                                        .font(.system(.callout, design: .serif))
-                                        .textSelection(.enabled)
-                                }
-                                .id(seg.id)
+                                transcriptBubble(seg)
+                                    .id(seg.id)
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
                         }
-                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
                     }
                     .onChange(of: transcriptSegments.count) { _ in
                         if let last = transcriptSegments.last {
@@ -384,79 +343,155 @@ public struct MeetingDetailView: View {
                 }
             }
         }
-        .frame(height: 250)
+        .frame(height: transcriptHeight)
         .background(.ultraThinMaterial)
         .transition(.move(edge: .bottom))
     }
 
-    // MARK: - Bottom Bar (Granola-style split waveform)
+    /// Draggable resize handle at the top of the transcript panel
+    private var transcriptDragHandle: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(height: 8)
+            .overlay {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(.quaternary)
+                    .frame(width: 36, height: 4)
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering { NSCursor.resizeUpDown.push() }
+                else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // Dragging up (negative translation) = bigger panel
+                        let newHeight = transcriptHeight - value.translation.height
+                        transcriptHeight = min(max(newHeight, 120), 600)
+                    }
+            )
+    }
+
+    // MARK: - Bottom Bar
 
     private var chatBar: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
-                // Left pill: [waveform dots + chevron] | [stop]
+                // Left pill: [waveform icon | copy icon]
                 HStack(spacing: 0) {
-                    // Left half — show/hide transcript
+                    // Waveform — toggle transcript
                     Button {
-                        withAnimation(.spring(duration: 0.3)) { showTranscript.toggle() }
+                        withAnimation(Anim.panel) { showTranscript.toggle() }
                         if showTranscript { Task { await loadTranscript() } }
                     } label: {
-                        HStack(spacing: 5) {
-                            // Animated waveform dots
-                            HStack(spacing: 2) {
-                                ForEach(0..<3, id: \.self) { i in
-                                    RoundedRectangle(cornerRadius: 1)
-                                        .fill(isActivelyScribing ? .green : .secondary.opacity(0.4))
-                                        .frame(width: 3, height: isActivelyScribing ? [6, 10, 7][i] : 4)
-                                }
-                            }
-                            Image(systemName: showTranscript ? "chevron.down" : "chevron.up")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(isActivelyScribing ? .green : (showTranscript ? .primary : .secondary))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ScribeButtonStyle())
                     .help(showTranscript ? "Hide transcript" : "Show transcript")
+                    .accessibilityLabel(showTranscript ? "Hide transcript" : "Show transcript")
 
-                    // Divider line between left and right
+                    // Divider line
                     Rectangle()
                         .fill(.quaternary)
                         .frame(width: 1, height: 20)
 
-                    // Right half — stop scribing
-                    Button {
-                        if isActivelyScribing {
-                            Task {
-                                isSummarizing = true
-                                await coordinator.stopRecording()
-                                for _ in 0..<30 {
-                                    try? await Task.sleep(for: .seconds(2))
-                                    let m = try? await MeetingStore.shared.getMeeting(id: meetingId)
-                                    if m?.state == "complete" { break }
-                                }
-                                await loadAll()
-                                isSummarizing = false
-                            }
-                        } else {
-                            // Start scribing
-                            Task {
-                                await coordinator.startRecording(meetingId: meetingId, title: meeting?.title ?? "Meeting")
-                            }
+                    // Copy menu
+                    Menu {
+                        Button {
+                            let text = transcriptAsPlainText()
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                        } label: {
+                            Label("Copy Transcript", systemImage: "text.quote")
                         }
+                        .disabled(transcriptSegments.isEmpty)
+
+                        Button {
+                            let text = summaryAsPlainText()
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                        } label: {
+                            Label("Copy Summary", systemImage: "doc.plaintext")
+                        }
+                        .disabled(summaries.isEmpty)
                     } label: {
-                        Image(systemName: isActivelyScribing ? "stop.fill" : "circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(isActivelyScribing ? .secondary : .green)
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
-                    .help(isActivelyScribing ? "Stop scribing" : "Start scribing")
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 34)
+                    .help("Copy transcript or summary")
+                    .accessibilityLabel("Copy options")
                 }
                 .background(.quaternary.opacity(0.5), in: Capsule())
+
+                // Stop button (visible when recording)
+                if isActivelyScribing {
+                    Button {
+                        Task {
+                            isSummarizing = true
+                            await coordinator.stopRecording()
+                            for _ in 0..<30 {
+                                try? await Task.sleep(for: .seconds(2))
+                                let m = try? await MeetingStore.shared.getMeeting(id: meetingId)
+                                if m?.state == "complete" { break }
+                            }
+                            await loadAll()
+                            isSummarizing = false
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 10))
+                            Text("Stop")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(ScribeButtonStyle())
+                    .background(.red.opacity(0.12), in: Capsule())
+                    .help("Stop recording and generate summary")
+                    .accessibilityLabel("Stop recording")
+                }
+
+                // Generate Summary button (for ended meetings without summary)
+                if !isActivelyScribing && meeting?.state == "ended" && summaries.isEmpty {
+                    Button {
+                        Task {
+                            isSummarizing = true
+                            try? await SummarizationService.shared.summarizeMeeting(meetingId: meetingId)
+                            try? await MeetingStore.shared.completeMeeting(id: meetingId)
+                            await loadAll()
+                            isSummarizing = false
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11))
+                            Text("Generate Summary")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(ScribeButtonStyle())
+                    .background(.purple.opacity(0.12), in: Capsule())
+                    .help("Process transcript and generate summary")
+                }
 
                 // Ask anything input
                 HStack(spacing: 8) {
@@ -480,14 +515,15 @@ public struct MeetingDetailView: View {
                         }
                         .buttonStyle(.plain)
                         .help(showChat ? "Hide chat history" : "Show chat history")
+                        .accessibilityLabel(showChat ? "Hide chat history" : "Show chat history")
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(.quaternary.opacity(0.3), in: Capsule())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.standard)
+            .padding(.vertical, Spacing.compact)
             .background(.bar)
         }
     }
@@ -551,7 +587,6 @@ public struct MeetingDetailView: View {
 
     private func saveTitle() {
         guard !editedTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        isEditingTitle = false
         Task {
             if var m = try? await MeetingStore.shared.getMeeting(id: meetingId) {
                 m.title = editedTitle.trimmingCharacters(in: .whitespaces)
@@ -568,9 +603,11 @@ public struct MeetingDetailView: View {
         chatInput = ""
 
         // Open chat panel if not visible
-        if !showChat { withAnimation { showChat = true } }
+        if !showChat { withAnimation(Anim.panel) { showChat = true } }
 
-        chatMessages.append(ChatMsg(role: .user, text: q))
+        withAnimation(Anim.panel) {
+            chatMessages.append(ChatMsg(role: .user, text: q))
+        }
         isChatLoading = true
 
         Task {
@@ -580,23 +617,119 @@ public struct MeetingDetailView: View {
             do {
                 let response = try await chatService.ask(q)
                 await MainActor.run {
-                    chatMessages.append(ChatMsg(role: .assistant, text: response))
+                    withAnimation(Anim.panel) {
+                        chatMessages.append(ChatMsg(role: .assistant, text: response))
+                    }
                     isChatLoading = false
                 }
             } catch {
                 await MainActor.run {
-                    chatMessages.append(ChatMsg(role: .assistant, text: "Error: \(error.localizedDescription)"))
+                    withAnimation(Anim.panel) {
+                        chatMessages.append(ChatMsg(role: .assistant, text: "Error: \(error.localizedDescription)"))
+                    }
                     isChatLoading = false
                 }
             }
         }
     }
 
-    private func formatDate(_ d: Date) -> String { let f = DateFormatter(); f.dateFormat = "MMM d"; return f.string(from: d) }
-    private func formatDuration(_ s: TimeInterval) -> String {
-        let m = Int(s) / 60; if m < 1 { return "\(Int(s))s" }; if m < 60 { return "\(m) min" }; return "\(m/60)h \(m%60)m"
+    // MARK: - Transcript Bubble (iMessage-style)
+
+    @ViewBuilder
+    private func transcriptBubble(_ seg: TranscriptSegment) -> some View {
+        let isUser = seg.speakerIndex == 0
+        HStack(alignment: .top, spacing: 0) {
+            if isUser { Spacer(minLength: 60) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    if !isUser {
+                        Text(displayName(for: seg))
+                            .font(.caption2).fontWeight(.semibold)
+                            .foregroundStyle(speakerColor(for: seg))
+                    }
+                    Text(formatTime(seg.startTime))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                    if isUser {
+                        Text("You")
+                            .font(.caption2).fontWeight(.semibold)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                Text(seg.text)
+                    .font(.system(.callout, design: .serif))
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        isUser ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 10)
+                    )
+            }
+
+            if !isUser { Spacer(minLength: 60) }
+        }
     }
-    private func formatTime(_ s: TimeInterval) -> String { String(format: "%d:%02d", Int(s)/60, Int(s)%60) }
+
+    // MARK: - Copy Helpers
+
+    private func transcriptAsPlainText() -> String {
+        transcriptSegments.map { seg in
+            let speaker = displayName(for: seg)
+            let time = formatTime(seg.startTime)
+            return "[\(time)] \(speaker): \(seg.text)"
+        }.joined(separator: "\n")
+    }
+
+    private func summaryAsPlainText() -> String {
+        summaries.map { summary in
+            if summary.summaryType == "full" {
+                return summary.content
+            }
+            let heading = summary.summaryType.replacingOccurrences(of: "_", with: " ").capitalized
+            return "\(heading)\n\(summary.content)"
+        }.joined(separator: "\n\n")
+    }
+
+    // MARK: - Speaker Display Names
+
+    /// Resolve a display name for a transcript segment.
+    /// speakerIndex 0 = "You" (mic input), others = participant name from calendar or "Speaker N" (1-based)
+    private func displayName(for segment: TranscriptSegment) -> String {
+        guard let idx = segment.speakerIndex else {
+            return segment.speaker ?? "Unknown"
+        }
+        // Speaker 0 is the user (mic input)
+        if idx == 0 { return "You" }
+        // Try to resolve from calendar participants
+        if let meeting, let participantsJSON = meeting.participants,
+           let data = participantsJSON.data(using: .utf8),
+           let names = try? JSONDecoder().decode([String].self, from: data) {
+            // idx 1 maps to first participant, idx 2 to second, etc.
+            let participantIdx = idx - 1
+            if participantIdx >= 0 && participantIdx < names.count {
+                return names[participantIdx]
+            }
+        }
+        // Fallback: 1-based numbering
+        return "Speaker \(idx)"
+    }
+
+    private func speakerColor(for segment: TranscriptSegment) -> Color {
+        guard let idx = segment.speakerIndex else { return .primary }
+        if idx == 0 { return .accentColor }
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint]
+        return colors[(idx - 1) % colors.count]
+    }
+
+    private var isUserSegment: (TranscriptSegment) -> Bool {
+        { $0.speakerIndex == 0 }
+    }
+
+    private func formatDate(_ d: Date) -> String { ScribeDateFormatting.shortDate(d) }
+    private func formatDuration(_ s: TimeInterval) -> String { ScribeDateFormatting.duration(s) }
+    private func formatTime(_ s: TimeInterval) -> String { ScribeDateFormatting.transcriptTime(s) }
 }
 
 private struct ChatMsg: Identifiable {

@@ -25,7 +25,7 @@ struct OverlayContentView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Spacing.standard)
             .padding(.vertical, 6)
 
             Divider()
@@ -49,6 +49,7 @@ struct OverlayContentView: View {
             Circle()
                 .fill(.red)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text("Recording")
                 .font(.caption)
                 .fontWeight(.medium)
@@ -57,9 +58,11 @@ struct OverlayContentView: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.horizontal, Spacing.standard)
+        .padding(.top, Spacing.compact)
         .padding(.bottom, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Recording in progress")
     }
 
     private var timerText: String {

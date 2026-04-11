@@ -65,7 +65,7 @@ public final class MainWindowController {
         autosaveName: String,
         resizable: Bool = true
     ) -> NSWindow {
-        var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
+        var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         if resizable { style.insert(.resizable) }
 
         let window = NSWindow(
@@ -75,6 +75,8 @@ public final class MainWindowController {
             defer: false
         )
         window.title = title
+        window.toolbarStyle = .unified
+        window.titlebarAppearsTransparent = true
         window.contentView = NSHostingView(rootView: content)
         window.center()
         window.setFrameAutosaveName(autosaveName)

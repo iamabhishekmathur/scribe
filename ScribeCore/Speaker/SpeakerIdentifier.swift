@@ -58,7 +58,8 @@ public actor SpeakerIdentifier {
         if let profile = try? await getProfile(speakerIndex: speakerIndex, meetingId: nil) {
             return profile.name
         }
-        return "Speaker \(speakerIndex)"
+        // Use 1-based numbering for non-technical users; index 0 = "You" (handled in UI)
+        return speakerIndex == 0 ? "You" : "Speaker \(speakerIndex)"
     }
 
     /// Get color for a speaker index

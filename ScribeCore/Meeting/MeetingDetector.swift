@@ -23,7 +23,7 @@ public actor MeetingDetector {
     private init() {}
 
     public enum DetectionEvent: Sendable {
-        case calendarEvent(title: String, eventId: String, meetingURL: String?, participants: [String])
+        case calendarEvent(title: String, eventId: String, meetingURL: String?, participants: [String], startDate: Date)
         case appLaunched(appName: String, bundleId: String)
         case appClosed(appName: String, bundleId: String)
         case audioActivity
@@ -52,7 +52,8 @@ public actor MeetingDetector {
                     title: meeting.title,
                     eventId: meeting.eventId,
                     meetingURL: meeting.meetingURL,
-                    participants: meeting.participants
+                    participants: meeting.participants,
+                    startDate: meeting.startDate
                 ))
             }
         }

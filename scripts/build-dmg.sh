@@ -41,6 +41,15 @@ chmod +x "${MACOS}/${APP_NAME}"
 # Copy Info.plist
 cp "ScribeApp/Info.plist" "${CONTENTS}/Info.plist"
 
+# Copy SPM resource bundles (required at runtime by Bundle.module)
+echo "==> Copying resource bundles..."
+for bundle in "${BUILD_DIR}"/*.bundle; do
+    if [ -d "$bundle" ]; then
+        cp -R "$bundle" "${RESOURCES}/"
+        echo "    Copied $(basename "$bundle")"
+    fi
+done
+
 # Create PkgInfo
 echo -n "APPL????" > "${CONTENTS}/PkgInfo"
 
@@ -84,6 +93,19 @@ fi
 
 rm -rf "$ICONSET_DIR"
 
+# ─── Code Sign ───────────────────────────────────────────────────
+echo "==> Code signing ${APP_BUNDLE}..."
+ENTITLEMENTS="Scribe.entitlements"
+
+# Sign the main binary with entitlements (ad-hoc if no identity provided)
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
+    --sign "$CODESIGN_IDENTITY" --deep \
+    "${BUILD_DIR}/${APP_BUNDLE}"
+
+echo "    Signed with identity: ${CODESIGN_IDENTITY}"
+codesign -dvv "${BUILD_DIR}/${APP_BUNDLE}" 2>&1 | grep -E "^(Authority|Signature)" || true
+
 echo "==> ${APP_BUNDLE} created: $(du -sh "${BUILD_DIR}/${APP_BUNDLE}" | cut -f1)"
 
 # ─── Create DMG ──────────────────────────────────────────────────
@@ -117,4 +139,13 @@ echo "    .app: ${BUILD_DIR}/${APP_BUNDLE}"
 echo "    .dmg: ${DMG_PATH} ($(du -h "$DMG_PATH" | cut -f1))"
 echo ""
 echo "To install: Open the .dmg and drag Scribe to Applications."
-echo "On first launch: Right-click > Open (to bypass Gatekeeper for unsigned apps)."
+if [ "$CODESIGN_IDENTITY" = "-" ]; then
+    echo ""
+    echo "NOTE: App is ad-hoc signed. Users who download it will need to run:"
+    echo "    xattr -cr /Applications/Scribe.app"
+    echo "to remove the quarantine flag before first launch."
+    echo ""
+    echo "For a fully trusted distribution, set CODESIGN_IDENTITY to your"
+    echo "Developer ID Application certificate and notarize with:"
+    echo "    xcrun notarytool submit ${DMG_PATH} --apple-id <email> --team-id <team> --password <app-password> --wait"
+fi

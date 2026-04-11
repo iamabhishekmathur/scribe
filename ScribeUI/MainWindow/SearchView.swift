@@ -55,11 +55,13 @@ public struct SearchView: View {
                 List {
                     ForEach(results) { result in
                         SearchResultRow(result: result)
+                            .transition(.opacity)
                             .onTapGesture {
                                 selectedMeetingId = result.meetingId
                             }
                     }
                 }
+                .animation(Anim.standard, value: results.count)
             }
         }
     }
@@ -111,9 +113,7 @@ struct SearchResultRow: View {
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        ScribeDateFormatting.fullDate(date)
     }
 }
 

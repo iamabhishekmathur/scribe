@@ -1,13 +1,14 @@
 import SwiftUI
 import ScribeCore
 
-/// Live transcript view with auto-scroll and speaker colors
+/// Live transcript view with auto-scroll, iMessage-style layout, and smart speaker names
 public struct LiveTranscriptView: View {
     let meetingId: UUID
     @State private var segments: [TranscriptSegment] = []
     @State private var autoScroll = true
+    @State private var meeting: MeetingRecord?
 
-    // Speaker color palette
+    // Speaker color palette (for non-user speakers, 1-indexed)
     private static let speakerColors: [Color] = [
         .blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint
     ]
@@ -19,21 +20,43 @@ public struct LiveTranscriptView: View {
     public var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 6) {
+                LazyVStack(spacing: 4) {
                     ForEach(segments) { segment in
-                        TranscriptSegmentRow(
-                            segment: segment,
-                            color: colorForSpeaker(segment.speakerIndex)
-                        )
+                        let isUser = segment.speakerIndex == 0
+                        HStack(alignment: .top, spacing: 0) {
+
+                            if isUser { Spacer(minLength: 40) }
+
+                            VStack(alignment: isUser ? .trailing : .leading, spacing: 1) {
+                                Text(displayName(for: segment))
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(isUser ? .accentColor : colorForSpeaker(segment.speakerIndex))
+
+                                Text(segment.text)
+                                    .font(.caption)
+                                    .foregroundStyle(.primary)
+                                    .textSelection(.enabled)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        isUser ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                            }
+
+                            if !isUser { Spacer(minLength: 40) }
+                        }
                         .id(segment.id)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.standard)
+                .padding(.vertical, Spacing.compact)
             }
             .onChange(of: segments.count) { _ in
                 if autoScroll, let last = segments.last {
-                    withAnimation(.easeOut(duration: 0.2)) {
+                    withAnimation(Anim.standard) {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
@@ -52,9 +75,11 @@ public struct LiveTranscriptView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(8)
+                .accessibilityLabel("Resume auto-scroll")
             }
         }
         .task {
+            meeting = try? await MeetingStore.shared.getMeeting(id: meetingId)
             await pollTranscripts()
         }
     }
@@ -72,28 +97,26 @@ public struct LiveTranscriptView: View {
         }
     }
 
+    private func displayName(for segment: TranscriptSegment) -> String {
+        guard let idx = segment.speakerIndex else {
+            return segment.speaker ?? "Unknown"
+        }
+        if idx == 0 { return "You" }
+        // Try calendar participant names
+        if let meeting, let participantsJSON = meeting.participants,
+           let data = participantsJSON.data(using: .utf8),
+           let names = try? JSONDecoder().decode([String].self, from: data) {
+            let pIdx = idx - 1
+            if pIdx >= 0 && pIdx < names.count {
+                return names[pIdx]
+            }
+        }
+        return "Speaker \(idx)"
+    }
+
     private func colorForSpeaker(_ index: Int?) -> Color {
         guard let index else { return .primary }
-        return Self.speakerColors[index % Self.speakerColors.count]
-    }
-}
-
-struct TranscriptSegmentRow: View {
-    let segment: TranscriptSegment
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let speaker = segment.speaker {
-                Text(speaker)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(color)
-            }
-            Text(segment.text)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-        }
+        if index == 0 { return .accentColor }
+        return Self.speakerColors[(index - 1) % Self.speakerColors.count]
     }
 }

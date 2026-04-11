@@ -67,6 +67,31 @@ public struct MeetingListView: View {
         }
         .listStyle(.sidebar)
         .searchable(text: $searchText, prompt: "Filter meetings")
+        .safeAreaInset(edge: .bottom) {
+            if folderId == nil {
+                Button {
+                    let meetingId = UUID()
+                    let title = "Meeting " + ScribeDateFormatting.dateTime(Date())
+                    NotificationCenter.default.post(name: .startNewMeeting, object: ["meetingId": meetingId, "title": title])
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform.circle.fill")
+                            .font(.body)
+                        Text("Start new meeting")
+                            .font(.callout)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(.green.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                    .foregroundStyle(.green)
+                }
+                .buttonStyle(ScribeButtonStyle())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.bar)
+            }
+        }
         .task {
             await loadAll()
         }
@@ -224,18 +249,7 @@ public struct MeetingListView: View {
     }
 
     private func formatSectionDate(_ date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInYesterday(date) { return "Yesterday" }
-
-        let formatter = DateFormatter()
-        let daysAgo = cal.dateComponents([.day], from: date, to: cal.startOfDay(for: Date())).day ?? 0
-        if daysAgo < 7 {
-            formatter.dateFormat = "EEEE" // "Monday"
-        } else {
-            formatter.dateFormat = "EEE, MMM d" // "Mon, Apr 1"
-        }
-        return formatter.string(from: date)
+        ScribeDateFormatting.sectionDate(date)
     }
 }
 
@@ -243,6 +257,7 @@ public struct MeetingListView: View {
 
 struct UpcomingEventRow: View {
     let event: CalendarManager.UpcomingMeeting
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -282,25 +297,14 @@ struct UpcomingEventRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .background(isHovered ? Color.primary.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .onHover { isHovered = $0 }
+        .animation(Anim.fast, value: isHovered)
     }
 
-    private var dayNumber: String {
-        let f = DateFormatter()
-        f.dateFormat = "d"
-        return f.string(from: event.startDate)
-    }
-
-    private var dayName: String {
-        let f = DateFormatter()
-        f.dateFormat = "EEE"
-        return f.string(from: event.startDate)
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f.string(from: date)
-    }
+    private var dayNumber: String { ScribeDateFormatting.dayNumber(event.startDate) }
+    private var dayName: String { ScribeDateFormatting.dayName(event.startDate) }
+    private func formatTime(_ date: Date) -> String { ScribeDateFormatting.time(date) }
 }
 
 // MARK: - Past Meeting Row
@@ -308,6 +312,7 @@ struct UpcomingEventRow: View {
 struct PastMeetingRow: View {
     let meeting: MeetingRecord
     let isSelected: Bool
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -322,10 +327,13 @@ struct PastMeetingRow: View {
             }
             .frame(width: 36)
 
-            // Accent bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(accentBarColor)
-                .frame(width: 3, height: 36)
+            // Accent bar with icon fallback for colorblind users
+            ZStack {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(accentBarColor)
+                    .frame(width: 3, height: 36)
+            }
+            .accessibilityLabel(stateAccessibilityLabel)
 
             // Title + subtitle
             VStack(alignment: .leading, spacing: 2) {
@@ -341,14 +349,23 @@ struct PastMeetingRow: View {
 
             Spacer()
 
-            // State indicator
+            // State indicator with text (non-color fallback)
             if meeting.state == "recording" {
                 HStack(spacing: 3) {
-                    Circle().fill(.green).frame(width: 6, height: 6)
+                    Image(systemName: "record.circle")
+                        .font(.caption2)
                     Text("Scribing")
                         .font(.caption2)
-                        .foregroundStyle(.green)
                 }
+                .foregroundStyle(.green)
+            } else if meeting.state == "processing" {
+                HStack(spacing: 3) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.caption2)
+                    Text("Processing")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.orange)
             }
 
             // Time
@@ -358,17 +375,21 @@ struct PastMeetingRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : .clear)
+        .background(isSelected ? Color.accentColor.opacity(0.1) : (isHovered ? Color.primary.opacity(0.04) : .clear), in: RoundedRectangle(cornerRadius: 6))
+        .onHover { isHovered = $0 }
+        .animation(Anim.fast, value: isHovered)
     }
 
-    private var dayNumber: String {
-        let f = DateFormatter(); f.dateFormat = "d"
-        return f.string(from: meeting.startTime)
-    }
+    private var dayNumber: String { ScribeDateFormatting.dayNumber(meeting.startTime) }
+    private var dayName: String { ScribeDateFormatting.dayName(meeting.startTime) }
 
-    private var dayName: String {
-        let f = DateFormatter(); f.dateFormat = "EEE"
-        return f.string(from: meeting.startTime)
+    private var stateAccessibilityLabel: String {
+        switch meeting.state {
+        case "recording": return "Recording"
+        case "complete": return "Complete"
+        case "processing": return "Processing"
+        default: return "Pending"
+        }
     }
 
     private var accentBarColor: Color {
@@ -394,10 +415,7 @@ struct PastMeetingRow: View {
         }
     }
 
-    private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "h:mm a"
-        return f.string(from: date)
-    }
+    private func formatTime(_ date: Date) -> String { ScribeDateFormatting.time(date) }
 }
 
 // MARK: - Badge (reusable)

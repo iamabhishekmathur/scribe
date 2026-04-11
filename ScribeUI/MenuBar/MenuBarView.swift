@@ -34,11 +34,16 @@ public struct MenuBarView: View {
                 }
                 .padding(.horizontal, 12)
             } else {
-                Text("Scribe")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
+                HStack(spacing: 6) {
+                    Text("Scribe")
+                        .font(.headline)
+                    Text("Idle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
             }
 
             Divider()
@@ -156,23 +161,10 @@ public struct MenuBarView: View {
     }
 
     private func formatEventTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        let cal = Calendar.current
-        if cal.isDateInToday(date) {
-            f.dateFormat = "h:mm a"
-            return "Today, \(f.string(from: date))"
-        } else if cal.isDateInTomorrow(date) {
-            f.dateFormat = "h:mm a"
-            return "Tomorrow, \(f.string(from: date))"
-        } else {
-            f.dateFormat = "EEE h:mm a"
-            return f.string(from: date)
-        }
+        ScribeDateFormatting.eventTime(date)
     }
 
     private var formattedDate: String {
-        let f = DateFormatter()
-        f.dateFormat = "MMM d, h:mm a"
-        return f.string(from: Date())
+        ScribeDateFormatting.dateTime(Date())
     }
 }

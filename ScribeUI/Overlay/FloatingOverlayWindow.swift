@@ -60,12 +60,24 @@ public final class OverlayWindowController: ObservableObject {
             overlay.positionAtRight()
             self.window = overlay
         }
+        window?.alphaValue = 0
         window?.orderFront(nil)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.2
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.window?.animator().alphaValue = 1
+        }
         isVisible = true
     }
 
     public func hide() {
-        window?.orderOut(nil)
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.15
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            self.window?.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            self?.window?.orderOut(nil)
+        })
         isVisible = false
     }
 
