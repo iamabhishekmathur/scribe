@@ -14,12 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         logger.info("applicationDidFinishLaunching")
         NSApp.setActivationPolicy(.accessory)
 
-        // Set app icon from bundled resources
-        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "png", subdirectory: "Assets.xcassets/AppIcon.appiconset"),
+        // Set app icon — the .icns is in Contents/Resources/ (placed by build-dmg.sh)
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
            let iconImage = NSImage(contentsOf: iconURL) {
-            NSApp.applicationIconImage = iconImage
-        } else if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
-                  let iconImage = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = iconImage
         }
 
@@ -38,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             } catch {
                 logger.error("Failed to initialize database: \(error.localizedDescription)")
             }
+
+            // Import any markdown meeting files not yet in SQLite
+            await MarkdownImporter.shared.syncFromFolder()
 
             // Start local API server
             do {
@@ -88,6 +88,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             if await MainActor.run(body: { settings.autoDetectMeetings }) {
                 await startMeetingDetection()
             }
+
+            // Check for updates (non-blocking)
+            if let release = await UpdateChecker.shared.checkForUpdate() {
+                await MainActor.run {
+                    showUpdateAlert(release)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func showUpdateAlert(_ release: UpdateChecker.Release) {
+        let alert = NSAlert()
+        alert.messageText = "Scribe \(release.version) Available"
+        alert.informativeText = release.releaseNotes.isEmpty
+            ? "A new version of Scribe is available."
+            : release.releaseNotes
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Download")
+        alert.addButton(withTitle: "Later")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(release.downloadURL)
         }
     }
 

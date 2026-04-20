@@ -39,7 +39,7 @@ public struct SettingsDetailView: View {
             .padding(24)
         }
         .task {
-            await permissions.checkAll()
+            await permissions.refreshStatus()
         }
     }
 }
@@ -48,9 +48,75 @@ public struct SettingsDetailView: View {
 
 private struct GeneralSettingsContent: View {
     @ObservedObject var settings: AppSettings
+    @State private var showFolderPicker = false
+
+    private var displayPath: String {
+        if settings.meetingStoragePath.isEmpty {
+            return "~/.scribe/meetings/"
+        }
+        return settings.meetingStoragePath
+            .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            SettingsSectionHeader(title: "Meeting Storage", icon: "folder")
+
+            Text("Choose where Scribe saves meeting files. Use an iCloud Drive or Dropbox folder to sync across devices.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(settings.meetingStoragePath.isEmpty ? "Default" : "Custom")
+                        .font(.callout).fontWeight(.medium)
+                    Text(displayPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+
+                Button("Choose Folder...") {
+                    showFolderPicker = true
+                }
+                .controlSize(.small)
+
+                if !settings.meetingStoragePath.isEmpty {
+                    Button("Reset") {
+                        settings.meetingStoragePath = ""
+                    }
+                    .controlSize(.small)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder]) { result in
+                if case .success(let url) = result {
+                    settings.meetingStoragePath = url.path
+                }
+            }
+
+            Divider()
+
+            SettingsSectionHeader(title: "Content Font", icon: "textformat")
+
+            Text("Font used for meeting summaries, notes, and the editor.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(ContentFontOption.allCases) { option in
+                    FontPickerRow(option: option, isSelected: settings.contentFont == option.rawValue) {
+                        settings.contentFont = option.rawValue
+                    }
+                }
+            }
+            .padding(.leading, 4)
+
+            Divider()
+
             SettingsSectionHeader(title: "Meeting Detection", icon: "antenna.radiowaves.left.and.right")
 
             VStack(alignment: .leading, spacing: 12) {
@@ -80,6 +146,7 @@ private struct GeneralSettingsContent: View {
                 }
             }
             .padding(.leading, 4)
+
         }
     }
 }
@@ -645,6 +712,39 @@ private struct PermRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Font Picker Row
+
+private struct FontPickerRow: View {
+    let option: ContentFontOption
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("The quick brown fox")
+                .font(option.font(size: 13))
+                .frame(width: 150, alignment: .leading)
+
+            Text(option.displayName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.caption)
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect() }
     }
 }
 

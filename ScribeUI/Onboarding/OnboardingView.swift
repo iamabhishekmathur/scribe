@@ -79,7 +79,7 @@ public struct OnboardingView: View {
         }
         .frame(width: 520, height: 440)
         .task {
-            await permissions.checkAll()
+            await permissions.refreshStatus()
         }
     }
 

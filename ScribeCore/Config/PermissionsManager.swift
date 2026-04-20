@@ -22,6 +22,29 @@ public final class PermissionsManager: ObservableObject {
         hasBundleId = Bundle.main.bundleIdentifier != nil
     }
 
+    /// Read-only status refresh — never triggers OS permission dialogs
+    public func refreshStatus() async {
+        // Microphone: read status only
+        microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+
+        // Screen recording: persisted flag only — do NOT call SCShareableContent
+        // (that API triggers the OS permission dialog on first call)
+        screenRecordingGranted = UserDefaults.standard.bool(forKey: "screenRecordingEverGranted")
+
+        // Calendar: read status only
+        let calStatus = EKEventStore.authorizationStatus(for: .event)
+        calendarGranted = calStatus == .authorized || calStatus == .fullAccess
+
+        // Notifications: read status only
+        if hasBundleId {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            notificationsGranted = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+        } else {
+            notificationsGranted = false
+        }
+    }
+
+    /// Request all permissions — triggers OS dialogs for undetermined ones
     public func checkAll() async {
         await checkMicrophone()
         await checkScreenRecording()

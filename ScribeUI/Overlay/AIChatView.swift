@@ -7,6 +7,7 @@ public struct AIChatView: View {
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
     @State private var isLoading = false
+    @State private var chatService = ChatService()
     @FocusState private var isInputFocused: Bool
 
     public init(meetingId: UUID) {
@@ -115,17 +116,22 @@ public struct AIChatView: View {
         isLoading = true
 
         Task {
-            // TODO: Wire to LLMManager with transcript context
-            // For now, placeholder response
-            try? await Task.sleep(for: .milliseconds(500))
-            await MainActor.run {
-                withAnimation(Anim.panel) {
-                    messages.append(ChatMessage(
-                        role: .assistant,
-                        content: "AI chat will be connected in Phase 6 (AI Features). This will use your configured LLM with the live transcript as context."
-                    ))
+            await chatService.start(meetingId: meetingId)
+            do {
+                let response = try await chatService.ask(question)
+                await MainActor.run {
+                    withAnimation(Anim.panel) {
+                        messages.append(ChatMessage(role: .assistant, content: response))
+                    }
+                    isLoading = false
                 }
-                isLoading = false
+            } catch {
+                await MainActor.run {
+                    withAnimation(Anim.panel) {
+                        messages.append(ChatMessage(role: .assistant, content: "Error: \(error.localizedDescription)"))
+                    }
+                    isLoading = false
+                }
             }
         }
     }

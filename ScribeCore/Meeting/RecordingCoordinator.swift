@@ -99,18 +99,10 @@ public final class RecordingCoordinator: ObservableObject {
         isRecording = false
         logger.info("Starting post-meeting processing...")
 
+        // Note: Summarization is NOT triggered automatically — user picks template
+        // per-meeting via the "Generate Summary" button. Meeting stays in "ended"
+        // state until they explicitly generate a summary.
         Task.detached {
-            do {
-                try await SummarizationService.shared.summarizeMeeting(meetingId: meetingId)
-                await MainActor.run {
-                    logger.info("Summarization complete")
-                }
-            } catch {
-                await MainActor.run {
-                    logger.error("Summarization failed: \(error.localizedDescription)")
-                }
-            }
-
             do {
                 try await EnrichmentService.shared.enrichAllNotes(meetingId: meetingId)
                 await MainActor.run {
@@ -122,9 +114,13 @@ public final class RecordingCoordinator: ObservableObject {
                 }
             }
 
-            try? await MeetingStore.shared.completeMeeting(id: meetingId)
-            await MainActor.run {
-                logger.info("Meeting marked complete")
+            // Export as markdown backup (works even without summary)
+            do {
+                try await MarkdownExporter.shared.exportMeeting(id: meetingId)
+            } catch {
+                await MainActor.run {
+                    logger.error("Markdown export failed: \(error.localizedDescription)")
+                }
             }
         }
 

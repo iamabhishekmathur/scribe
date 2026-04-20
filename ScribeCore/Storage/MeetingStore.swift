@@ -75,6 +75,12 @@ public actor MeetingStore {
         }
     }
 
+    public func updateTranscriptSegment(_ segment: TranscriptSegment) throws {
+        try db.writer.write { db in
+            try segment.update(db)
+        }
+    }
+
     public func addTranscriptSegments(_ segments: [TranscriptSegment]) throws {
         try db.writer.write { db in
             for segment in segments {
@@ -105,6 +111,12 @@ public actor MeetingStore {
             var updated = note
             updated.updatedAt = Date()
             try updated.update(db)
+        }
+    }
+
+    public func deleteNote(id: UUID) throws {
+        try db.writer.write { db in
+            _ = try UserNote.deleteOne(db, key: id.uuidString)
         }
     }
 

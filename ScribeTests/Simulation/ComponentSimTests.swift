@@ -180,7 +180,7 @@ struct SpeakerIdentifierSimTests {
     func defaultDisplayName() async {
         let si = SpeakerIdentifier.shared
         let name = await si.displayName(speakerIndex: 0, meetingId: UUID())
-        #expect(name == "Speaker 0")
+        #expect(name == "You")
         let name3 = await si.displayName(speakerIndex: 3, meetingId: UUID())
         #expect(name3 == "Speaker 3")
     }
@@ -503,7 +503,7 @@ struct MeetingDetectorSimTests {
 
     @Test("MeetingDetector initializes with monitoring=false")
     func initialState() async {
-        let d = MeetingDetector()
+        let d = MeetingDetector.shared
         #expect(await d.isMonitoring == false)
     }
 
@@ -527,7 +527,7 @@ struct MeetingDetectorSimTests {
     func detectionEventTypes() {
         // Verify we can construct all event types
         let events: [MeetingDetector.DetectionEvent] = [
-            .calendarEvent(title: "Standup", eventId: "e1", meetingURL: "https://meet.google.com/abc", participants: ["Alice"]),
+            .calendarEvent(title: "Standup", eventId: "e1", meetingURL: "https://meet.google.com/abc", participants: ["Alice"], startDate: Date()),
             .appLaunched(appName: "Zoom", bundleId: "us.zoom.xos"),
             .audioActivity,
         ]

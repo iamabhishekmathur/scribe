@@ -26,10 +26,7 @@ let package = Package(
             name: "ScribeApp",
             dependencies: ["ScribeCore", "ScribeUI"],
             path: "ScribeApp",
-            exclude: ["Info.plist"],
-            resources: [
-                .process("Resources/Assets.xcassets"),
-            ]
+            exclude: ["Info.plist", "Resources"]
         ),
         .target(
             name: "ScribeCore",

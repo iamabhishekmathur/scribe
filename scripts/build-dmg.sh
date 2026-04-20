@@ -4,7 +4,7 @@ set -euo pipefail
 # ─── Configuration ───────────────────────────────────────────────
 APP_NAME="Scribe"
 BUNDLE_ID="com.scribe.app"
-VERSION="0.1.0"
+VERSION="0.2.0"
 BUILD_DIR=".build/release"
 APP_BUNDLE="${APP_NAME}.app"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
@@ -42,6 +42,10 @@ chmod +x "${MACOS}/${APP_NAME}"
 cp "ScribeApp/Info.plist" "${CONTENTS}/Info.plist"
 
 # Copy SPM resource bundles (required at runtime by Bundle.module)
+# SPM generates: Bundle.main.bundleURL.appendingPathComponent("Name.bundle")
+# For a .app, Bundle.main.bundleURL = Scribe.app/ but codesign rejects loose
+# files at bundle root. So we copy to both Contents/Resources/ (standard) and
+# Contents/MacOS/ (where the executable lives — also a Bundle.main search path).
 echo "==> Copying resource bundles..."
 for bundle in "${BUILD_DIR}"/*.bundle; do
     if [ -d "$bundle" ]; then
@@ -92,6 +96,15 @@ if ! grep -q "CFBundleExecutable" "${CONTENTS}/Info.plist"; then
 fi
 
 rm -rf "$ICONSET_DIR"
+
+# ─── Embed .env for personal builds ──────────────────────────────
+if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+    echo "==> Embedding Google OAuth client ID into bundle Resources..."
+    echo "GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_CLIENT_ID}" > "${RESOURCES}/.env"
+    echo "    .env written to ${RESOURCES}/.env"
+else
+    echo "==> No GOOGLE_CLIENT_ID set — open-source build (no embedded secrets)"
+fi
 
 # ─── Code Sign ───────────────────────────────────────────────────
 echo "==> Code signing ${APP_BUNDLE}..."

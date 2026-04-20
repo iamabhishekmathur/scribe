@@ -20,9 +20,17 @@ public struct MeetingDetailView: View {
     @State private var transcriptPollTask: Task<Void, Never>?
     @State private var detailFolders: [Folder] = []
     @State private var transcriptHeight: CGFloat = 250
+    @State private var errorMessage: String?
+    @State private var showSummaryPicker = false
+    @State private var selectedTemplate: SummaryTemplate = .general
     @FocusState private var titleFieldFocused: Bool
 
     @ObservedObject private var coordinator = RecordingCoordinator.shared
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var contentFont: ContentFontOption {
+        ContentFontOption(rawValue: settings.contentFont) ?? .systemSerif
+    }
 
     public init(meetingId: UUID) {
         self.meetingId = meetingId
@@ -34,6 +42,27 @@ public struct MeetingDetailView: View {
 
     private var isComplete: Bool {
         meeting?.state == "complete"
+    }
+
+    /// Group consecutive same-speaker transcript segments for cleaner display
+    private var groupedTranscript: [TranscriptSegment] {
+        var result: [TranscriptSegment] = []
+        for seg in transcriptSegments {
+            if var last = result.last,
+               last.speakerIndex == seg.speakerIndex,
+               last.speaker == seg.speaker {
+                result[result.count - 1].text += " " + seg.text
+                result[result.count - 1].endTime = seg.endTime
+            } else {
+                result.append(seg)
+            }
+        }
+        return result
+    }
+
+    private var isPostRecording: Bool {
+        guard let m = meeting else { return false }
+        return m.state == "ended" || m.state == "processing"
     }
 
     public var body: some View {
@@ -73,10 +102,22 @@ public struct MeetingDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .errorBanner($errorMessage)
         .task { await loadAll(); startPollingIfNeeded() }
         .onChange(of: meetingId) { _ in
             transcriptPollTask?.cancel()
             Task { await loadAll(); startPollingIfNeeded() }
+        }
+        .onChange(of: coordinator.isRecording) { _ in
+            // Recording state changed — restart polling if needed
+            transcriptPollTask?.cancel()
+            startPollingIfNeeded()
+            Task { await loadAll() }
+        }
+        .onChange(of: coordinator.currentMeetingId) { _ in
+            // Current meeting changed in coordinator — re-evaluate polling
+            transcriptPollTask?.cancel()
+            startPollingIfNeeded()
         }
         .onDisappear { transcriptPollTask?.cancel() }
     }
@@ -130,8 +171,12 @@ public struct MeetingDetailView: View {
 
                 Button {
                     Task {
-                        try? await MeetingStore.shared.deleteMeeting(id: meetingId)
-                        NotificationCenter.default.post(name: .meetingDeleted, object: meetingId)
+                        do {
+                            try await MeetingStore.shared.deleteMeeting(id: meetingId)
+                            NotificationCenter.default.post(name: .meetingDeleted, object: meetingId)
+                        } catch {
+                            errorMessage = "Failed to delete meeting"
+                        }
                     }
                 } label: {
                     Image(systemName: "trash").font(.body)
@@ -171,14 +216,14 @@ public struct MeetingDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if noteContent.isEmpty && !isActivelyScribing {
                     Text("Write your notes here...")
-                        .font(.system(.title3, design: .serif))
+                        .font(contentFont.headingFont())
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, Spacing.generous)
                         .padding(.top, Spacing.generous)
                 }
 
                 TextEditor(text: $noteContent)
-                    .font(.system(.body, design: .serif))
+                    .font(contentFont.font())
                     .lineSpacing(5)
                     .scrollContentBackground(.hidden)
                     .frame(maxWidth: .infinity, minHeight: 400)
@@ -196,13 +241,16 @@ public struct MeetingDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(summaries) { summary in
                     VStack(alignment: .leading, spacing: 8) {
-                        if summary.summaryType != "full" {
-                            Text(summary.summaryType.replacingOccurrences(of: "_", with: " ").capitalized)
-                                .font(.system(.title3, design: .serif))
-                                .fontWeight(.semibold)
+                        // Show template name as a subtle label
+                        if let tmpl = SummaryTemplate.all.first(where: { $0.id == summary.summaryType }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: tmpl.icon).font(.caption2)
+                                Text(tmpl.name).font(.caption)
+                            }
+                            .foregroundStyle(.tertiary)
                         }
                         Text(renderMarkdown(summary.content))
-                            .font(.system(.body, design: .serif))
+                            .font(contentFont.font())
                             .textSelection(.enabled)
                             .lineSpacing(5)
                     }
@@ -212,10 +260,10 @@ public struct MeetingDetailView: View {
                 if !noteContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Divider()
                     Text("Your Notes")
-                        .font(.system(.headline, design: .serif))
+                        .font(contentFont.headingFont())
                         .foregroundStyle(.secondary)
                     Text(renderMarkdown(noteContent))
-                        .font(.system(.body, design: .serif))
+                        .font(contentFont.font())
                         .textSelection(.enabled)
                         .lineSpacing(4)
                         .foregroundStyle(.secondary)
@@ -327,7 +375,7 @@ public struct MeetingDetailView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 4) {
-                            ForEach(transcriptSegments) { seg in
+                            ForEach(groupedTranscript) { seg in
                                 transcriptBubble(seg)
                                     .id(seg.id)
                                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -438,15 +486,8 @@ public struct MeetingDetailView: View {
                 if isActivelyScribing {
                     Button {
                         Task {
-                            isSummarizing = true
                             await coordinator.stopRecording()
-                            for _ in 0..<30 {
-                                try? await Task.sleep(for: .seconds(2))
-                                let m = try? await MeetingStore.shared.getMeeting(id: meetingId)
-                                if m?.state == "complete" { break }
-                            }
                             await loadAll()
-                            isSummarizing = false
                         }
                     } label: {
                         HStack(spacing: 5) {
@@ -469,13 +510,8 @@ public struct MeetingDetailView: View {
                 // Generate Summary button (for ended meetings without summary)
                 if !isActivelyScribing && meeting?.state == "ended" && summaries.isEmpty {
                     Button {
-                        Task {
-                            isSummarizing = true
-                            try? await SummarizationService.shared.summarizeMeeting(meetingId: meetingId)
-                            try? await MeetingStore.shared.completeMeeting(id: meetingId)
-                            await loadAll()
-                            isSummarizing = false
-                        }
+                        selectedTemplate = SummaryTemplate.find(AppSettings.shared.defaultTemplateId)
+                        showSummaryPicker = true
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "sparkles")
@@ -490,7 +526,10 @@ public struct MeetingDetailView: View {
                     }
                     .buttonStyle(ScribeButtonStyle())
                     .background(.purple.opacity(0.12), in: Capsule())
-                    .help("Process transcript and generate summary")
+                    .help("Choose summary sections and generate")
+                    .popover(isPresented: $showSummaryPicker, arrowEdge: .top) {
+                        summaryTypePicker
+                    }
                 }
 
                 // Ask anything input
@@ -525,6 +564,26 @@ public struct MeetingDetailView: View {
             .padding(.horizontal, Spacing.standard)
             .padding(.vertical, Spacing.compact)
             .background(.bar)
+        }
+    }
+
+    // MARK: - Summary Template Picker
+
+    private var summaryTypePicker: some View {
+        TemplatePickerView(selectedTemplate: $selectedTemplate) {
+            showSummaryPicker = false
+            generateWithTemplate()
+        }
+    }
+
+    private func generateWithTemplate() {
+        let tmpl = selectedTemplate
+        Task {
+            isSummarizing = true
+            try? await SummarizationService.shared.summarizeMeeting(meetingId: meetingId, template: tmpl)
+            try? await MeetingStore.shared.completeMeeting(id: meetingId)
+            await loadAll()
+            isSummarizing = false
         }
     }
 
@@ -577,9 +636,11 @@ public struct MeetingDetailView: View {
         transcriptPollTask = Task {
             while !Task.isCancelled {
                 await loadTranscript()
-                // Also reload meeting state
                 meeting = try? await MeetingStore.shared.getMeeting(id: meetingId)
-                summaries = (try? await MeetingStore.shared.getSummaries(meetingId: meetingId)) ?? []
+
+                // Stop polling once meeting ends
+                if !isActivelyScribing { break }
+
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -735,4 +796,78 @@ public struct MeetingDetailView: View {
 private struct ChatMsg: Identifiable {
     let id = UUID(); let role: Role; let text: String
     enum Role { case user, assistant }
+}
+
+// MARK: - Template Picker (extracted for type-checker)
+
+private struct TemplatePickerView: View {
+    @Binding var selectedTemplate: SummaryTemplate
+    let onGenerate: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Meeting Type")
+                .font(.callout).fontWeight(.semibold)
+
+            ForEach(SummaryTemplate.all) { tmpl in
+                templateRow(tmpl)
+            }
+
+            Divider()
+
+            sectionsPreview
+
+            Button(action: onGenerate) {
+                HStack {
+                    Image(systemName: "sparkles")
+                    Text("Generate")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(width: 240)
+    }
+
+    private func templateRow(_ tmpl: SummaryTemplate) -> some View {
+        let isSelected = selectedTemplate.id == tmpl.id
+        return HStack(spacing: 8) {
+            Image(systemName: tmpl.icon)
+                .frame(width: 16)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tmpl.name)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                Text(tmpl.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.caption2).foregroundStyle(Color.accentColor)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture { selectedTemplate = tmpl }
+    }
+
+    private var sectionsPreview: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Sections:")
+                .font(.caption2).foregroundStyle(.tertiary)
+            ForEach(selectedTemplate.sections) { section in
+                Text("• \(section.heading)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
 }

@@ -113,6 +113,35 @@ public struct MenuBarView: View {
             }
             .keyboardShortcut(",")
 
+            Button("Check for Updates...") {
+                Task {
+                    if let release = await UpdateChecker.shared.checkForUpdate() {
+                        await MainActor.run {
+                            let alert = NSAlert()
+                            alert.messageText = "Scribe \(release.version) Available"
+                            alert.informativeText = release.releaseNotes.isEmpty
+                                ? "A new version of Scribe is available."
+                                : release.releaseNotes
+                            alert.alertStyle = .informational
+                            alert.addButton(withTitle: "Download")
+                            alert.addButton(withTitle: "Later")
+                            if alert.runModal() == .alertFirstButtonReturn {
+                                NSWorkspace.shared.open(release.downloadURL)
+                            }
+                        }
+                    } else {
+                        await MainActor.run {
+                            let alert = NSAlert()
+                            alert.messageText = "You're Up to Date"
+                            alert.informativeText = "Scribe is running the latest version."
+                            alert.alertStyle = .informational
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
+                    }
+                }
+            }
+
             Divider()
 
             Button("Quit Scribe") {

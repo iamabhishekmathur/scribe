@@ -18,6 +18,8 @@ public actor ProcessDetector {
         "com.microsoft.teams2": "Microsoft Teams",
         "com.cisco.webexmeetingsapp": "Webex",
         "com.cisco.webex.meetings": "Webex",
+        "com.tinyspeck.slackmacgap": "Slack",
+        "com.tinyspeck.slackmacgap2": "Slack",
         "com.google.Chrome": "Google Chrome",
         "com.apple.Safari": "Safari",
         "com.brave.Browser": "Brave Browser",
@@ -36,6 +38,8 @@ public actor ProcessDetector {
         "com.microsoft.teams2",
         "com.cisco.webexmeetingsapp",
         "com.cisco.webex.meetings",
+        "com.tinyspeck.slackmacgap",
+        "com.tinyspeck.slackmacgap2",
     ]
 
     /// Zoom meeting helper process — present only when a meeting is active
@@ -147,6 +151,14 @@ public actor ProcessDetector {
         // WebEx
         if runningBundleIds.contains("com.cisco.webexmeetingsapp") || runningBundleIds.contains("com.cisco.webex.meetings") {
             return true
+        }
+
+        // Slack: detect huddles/calls — Slack is frontmost (similar to Teams heuristic)
+        if runningBundleIds.contains("com.tinyspeck.slackmacgap") || runningBundleIds.contains("com.tinyspeck.slackmacgap2") {
+            if let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+               front.contains("slackmacgap") {
+                return true
+            }
         }
 
         return false

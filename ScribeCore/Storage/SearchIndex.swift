@@ -13,6 +13,7 @@ public struct SearchResult: Identifiable, Sendable {
         case transcript
         case note
         case summary
+        case title
     }
 }
 
@@ -23,6 +24,32 @@ public actor SearchIndex {
 
     private init() {}
 
+    /// Search meeting titles using LIKE (no FTS needed)
+    public func searchTitles(query: String, limit: Int = 20) throws -> [SearchResult] {
+        let pattern = "%\(query)%"
+        return try db.reader.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT id, title, startTime
+                FROM meetings
+                WHERE title LIKE ?
+                ORDER BY startTime DESC
+                LIMIT ?
+                """, arguments: [pattern, limit])
+
+            return rows.map { row in
+                SearchResult(
+                    id: UUID(uuidString: row["id"]) ?? UUID(),
+                    meetingId: UUID(uuidString: row["id"]) ?? UUID(),
+                    meetingTitle: row["title"],
+                    snippet: row["title"],
+                    source: .title,
+                    timestamp: row["startTime"]
+                )
+            }
+        }
+    }
+
+    /// Full-text search across transcripts, notes, and summaries
     public func search(query: String, limit: Int = 50) throws -> [SearchResult] {
         let ftsQuery = query
             .components(separatedBy: .whitespaces)

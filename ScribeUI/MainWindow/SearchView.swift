@@ -1,12 +1,13 @@
 import SwiftUI
 import ScribeCore
 
-/// Full-text search across meetings via FTS5
+/// Full-text search across meetings — titles, transcripts, notes, and summaries
 public struct SearchView: View {
     @Binding var selectedMeetingId: UUID?
     @State private var query = ""
     @State private var results: [SearchResult] = []
     @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
 
     public init(selectedMeetingId: Binding<UUID?>) {
         self._selectedMeetingId = selectedMeetingId
@@ -21,6 +22,11 @@ public struct SearchView: View {
                 TextField("Search across all meetings...", text: $query)
                     .textFieldStyle(.plain)
                     .onSubmit { performSearch() }
+
+                if isSearching {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
                 if !query.isEmpty {
                     Button {
@@ -40,16 +46,13 @@ public struct SearchView: View {
             Divider()
 
             // Results
-            if isSearching {
-                ProgressView("Searching...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if results.isEmpty && !query.isEmpty {
+            if results.isEmpty && !query.isEmpty && !isSearching {
                 ContentUnavailableView.search(text: query)
-            } else if results.isEmpty {
+            } else if results.isEmpty && query.isEmpty {
                 ContentUnavailableView(
                     "Search Meetings",
                     systemImage: "magnifyingglass",
-                    description: Text("Search across transcripts, notes, and summaries.")
+                    description: Text("Search across titles, transcripts, notes, and summaries.")
                 )
             } else {
                 List {
@@ -64,19 +67,61 @@ public struct SearchView: View {
                 .animation(Anim.standard, value: results.count)
             }
         }
+        .onChange(of: query) { _ in
+            debouncedSearch()
+        }
+    }
+
+    private func debouncedSearch() {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else {
+            results = []
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await performSearchAsync(q)
+        }
     }
 
     private func performSearch() {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
-
         isSearching = true
-        Task {
-            let searchResults = (try? await SearchIndex.shared.search(query: q)) ?? []
-            await MainActor.run {
-                results = searchResults
-                isSearching = false
+        Task { await performSearchAsync(q) }
+    }
+
+    private func performSearchAsync(_ q: String) async {
+        // Search FTS index (transcripts, notes, summaries)
+        let ftsResults = (try? await SearchIndex.shared.search(query: q)) ?? []
+
+        // Also search meeting titles directly
+        let titleResults = (try? await SearchIndex.shared.searchTitles(query: q)) ?? []
+
+        // Merge, deduplicate by meetingId for title results
+        var seen = Set<UUID>()
+        var merged: [SearchResult] = []
+
+        // Title matches first
+        for r in titleResults {
+            if seen.insert(r.meetingId).inserted {
+                merged.append(r)
             }
+        }
+
+        // Then FTS results
+        for r in ftsResults {
+            merged.append(r)
+        }
+
+        await MainActor.run {
+            results = merged
+            isSearching = false
         }
     }
 }
@@ -134,6 +179,7 @@ struct SourceBadge: View {
         case .transcript: return .blue
         case .note: return .green
         case .summary: return .purple
+        case .title: return .orange
         }
     }
 }

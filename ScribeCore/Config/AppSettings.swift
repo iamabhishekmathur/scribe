@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 @MainActor
 public final class AppSettings: ObservableObject {
@@ -19,6 +20,10 @@ public final class AppSettings: ObservableObject {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let screenContextEnabled = "screenContextEnabled"
         static let screenContextInterval = "screenContextInterval"
+        static let summaryTypes = "summaryTypes"
+        static let defaultTemplate = "defaultTemplate"
+        static let meetingStoragePath = "meetingStoragePath"
+        static let contentFont = "contentFont"
     }
 
     @Published public var transcriptionProvider: TranscriptionProviderType {
@@ -69,6 +74,35 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(screenContextInterval, forKey: Keys.screenContextInterval) }
     }
 
+    /// Which summary types to generate after a meeting. Defaults to all.
+    @Published public var enabledSummaryTypes: Set<String> {
+        didSet { defaults.set(Array(enabledSummaryTypes), forKey: Keys.summaryTypes) }
+    }
+
+    /// Default summary template for auto-summarization after recording stops
+    @Published public var defaultTemplateId: String {
+        didSet { defaults.set(defaultTemplateId, forKey: Keys.defaultTemplate) }
+    }
+
+    /// User-chosen folder for meeting markdown files. Nil = default ~/.scribe/meetings
+    @Published public var meetingStoragePath: String {
+        didSet { defaults.set(meetingStoragePath, forKey: Keys.meetingStoragePath) }
+    }
+
+    /// Font for meeting content (summary, notes, transcript). Default: "System Serif"
+    @Published public var contentFont: String {
+        didSet { defaults.set(contentFont, forKey: Keys.contentFont) }
+    }
+
+    /// Resolved URL for meeting storage folder
+    public var meetingStorageURL: URL {
+        if meetingStoragePath.isEmpty {
+            return FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".scribe/meetings", isDirectory: true)
+        }
+        return URL(fileURLWithPath: meetingStoragePath, isDirectory: true)
+    }
+
     private init() {
         let provider = defaults.string(forKey: Keys.transcriptionProvider) ?? TranscriptionProviderType.deepgram.rawValue
         self.transcriptionProvider = TranscriptionProviderType(rawValue: provider) ?? .deepgram
@@ -87,5 +121,51 @@ public final class AppSettings: ObservableObject {
         self.hasCompletedOnboarding = defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool ?? false
         self.screenContextEnabled = defaults.object(forKey: Keys.screenContextEnabled) as? Bool ?? true
         self.screenContextInterval = defaults.object(forKey: Keys.screenContextInterval) as? Double ?? 15.0
+
+        let savedTypes = defaults.stringArray(forKey: Keys.summaryTypes)
+        self.enabledSummaryTypes = Set(savedTypes ?? ["full", "action_items", "decisions", "topics", "follow_ups"])
+        self.defaultTemplateId = defaults.string(forKey: Keys.defaultTemplate) ?? "general"
+        self.meetingStoragePath = defaults.string(forKey: Keys.meetingStoragePath) ?? ""
+        self.contentFont = defaults.string(forKey: Keys.contentFont) ?? "System Serif"
     }
+}
+
+/// Font options for meeting content — all ship with macOS
+public enum ContentFontOption: String, CaseIterable, Identifiable {
+    case systemSerif = "System Serif"
+    case systemSans = "System Sans"
+    case systemMono = "System Mono"
+    case georgia = "Georgia"
+    case helveticaNeue = "Helvetica Neue"
+    case avenirNext = "Avenir Next"
+    case palatino = "Palatino"
+    case charter = "Charter"
+    case baskerville = "Baskerville"
+    case optimaRegular = "Optima"
+
+    public var id: String { rawValue }
+
+    public var displayName: String { rawValue }
+
+    /// Resolve to a SwiftUI Font for body text
+    public func font(size: CGFloat = 14) -> Font {
+        switch self {
+        case .systemSerif: return .system(size: size, design: .serif)
+        case .systemSans: return .system(size: size, design: .default)
+        case .systemMono: return .system(size: size, design: .monospaced)
+        default: return .custom(rawValue, size: size, relativeTo: .body)
+        }
+    }
+
+    /// Resolve to a SwiftUI Font for headings
+    public func headingFont(size: CGFloat = 17) -> Font {
+        switch self {
+        case .systemSerif: return .system(size: size, weight: .semibold, design: .serif)
+        case .systemSans: return .system(size: size, weight: .semibold, design: .default)
+        case .systemMono: return .system(size: size, weight: .semibold, design: .monospaced)
+        default: return .custom(rawValue, size: size, relativeTo: .title3).weight(.semibold)
+        }
+    }
+
+    public var isAvailable: Bool { true }
 }

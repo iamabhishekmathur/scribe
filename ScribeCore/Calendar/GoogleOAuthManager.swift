@@ -43,7 +43,9 @@ public actor GoogleOAuthManager {
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".env"),
             // 3. Next to the executable
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent(".env"),
-            // 4. Walk up from .build/arm64-apple-macosx/debug/ to project root
+            // 4. Bundle Resources (embedded by build-dmg.sh for personal builds)
+            Bundle.main.resourceURL?.appendingPathComponent(".env"),
+            // 5. Walk up from .build/arm64-apple-macosx/debug/ to project root
             Bundle.main.executableURL?
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
