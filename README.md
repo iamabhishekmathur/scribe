@@ -66,7 +66,7 @@ Scribe works differently:
 3. **Important:** Scribe is not notarized yet (no Apple Developer Program enrollment). macOS will block it on first launch. Run this command to remove the quarantine flag:
 
 ```bash
-xattr -cr /Applications/Scribe.app
+sudo xattr -cr /Applications/Scribe.app
 ```
 
 4. Open Scribe from Applications. It will appear in your menu bar.
