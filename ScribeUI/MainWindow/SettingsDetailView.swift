@@ -60,36 +60,53 @@ private struct GeneralSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            SettingsSectionHeader(title: "Appearance", icon: "circle.lefthalf.filled")
+
+            Text("Choose how Scribe looks. System follows your macOS appearance.")
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
+
+            MonoSegmentedControl(
+                selection: $settings.appearance,
+                options: [
+                    ("System", "system"),
+                    ("Dark", "dark"),
+                    ("Light", "light"),
+                ]
+            )
+            .frame(maxWidth: 240)
+
+            Divider()
+
             SettingsSectionHeader(title: "Meeting Storage", icon: "folder")
 
             Text("Choose where Scribe saves meeting files. Use an iCloud Drive or Dropbox folder to sync across devices.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(settings.meetingStoragePath.isEmpty ? "Default" : "Custom")
-                        .font(.callout).fontWeight(.medium)
+                        .font(MonoFont.sans(size: TypeScale.base, weight: .medium))
                     Text(displayPath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(MonoFont.sans(size: TypeScale.sm))
+                        .foregroundStyle(MonoColors.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
 
                 Spacer()
 
-                Button("Choose Folder...") {
+                Button("Choose Folder…") {
                     showFolderPicker = true
                 }
-                .controlSize(.small)
+                .buttonStyle(MonoSecondaryButtonStyle())
 
                 if !settings.meetingStoragePath.isEmpty {
                     Button("Reset") {
                         settings.meetingStoragePath = ""
                     }
-                    .controlSize(.small)
-                    .foregroundStyle(.secondary)
+                    .buttonStyle(MonoSecondaryButtonStyle())
                 }
             }
             .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder]) { result in
@@ -103,8 +120,8 @@ private struct GeneralSettingsContent: View {
             SettingsSectionHeader(title: "Content Font", icon: "textformat")
 
             Text("Font used for meeting summaries, notes, and the editor.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
 
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(ContentFontOption.allCases) { option in
@@ -119,10 +136,13 @@ private struct GeneralSettingsContent: View {
 
             SettingsSectionHeader(title: "Meeting Detection", icon: "antenna.radiowaves.left.and.right")
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Toggle("Auto-detect meetings", isOn: $settings.autoDetectMeetings)
+                    .toggleStyle(MonoCheckboxToggleStyle())
                 Toggle("Auto-start recording", isOn: $settings.autoStartRecording)
+                    .toggleStyle(MonoCheckboxToggleStyle())
                 Toggle("Show overlay during meetings", isOn: $settings.showOverlayDuringMeetings)
+                    .toggleStyle(MonoCheckboxToggleStyle())
             }
             .padding(.leading, 4)
 
@@ -130,23 +150,156 @@ private struct GeneralSettingsContent: View {
 
             SettingsSectionHeader(title: "Screen Context", icon: "rectangle.badge.checkmark")
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Toggle("Capture screen context during screen share", isOn: $settings.screenContextEnabled)
+                    .toggleStyle(MonoCheckboxToggleStyle())
                 if settings.screenContextEnabled {
-                    HStack {
+                    HStack(spacing: Spacing.compact) {
                         Text("Capture interval:")
-                            .foregroundStyle(.secondary)
+                            .font(MonoFont.sans(size: TypeScale.base))
+                            .foregroundStyle(MonoColors.textMuted)
                         TextField("", value: $settings.screenContextInterval, format: .number)
-                            .frame(width: 50)
-                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 56)
+                            .textFieldStyle(MonoTextFieldStyle())
                         Text("seconds")
-                            .foregroundStyle(.secondary)
+                            .font(MonoFont.sans(size: TypeScale.base))
+                            .foregroundStyle(MonoColors.textMuted)
                     }
-                    .padding(.leading, 4)
+                    .padding(.leading, 22)
                 }
             }
             .padding(.leading, 4)
 
+            Divider()
+
+            SettingsSectionHeader(title: "Disk Usage", icon: "internaldrive")
+
+            DiskUsageCard()
+
+        }
+    }
+}
+
+// MARK: - Disk Usage Card
+
+private struct DiskUsageCard: View {
+    @State private var totalSize = "Calculating..."
+    @State private var meetingCount = 0
+    @State private var audioHours: Double = 0
+    @State private var audioBytes: Int64 = 0
+    @State private var transcriptBytes: Int64 = 0
+    @State private var summaryBytes: Int64 = 0
+    @State private var otherBytes: Int64 = 0
+    @State private var isLoaded = false
+
+    private var totalBytes: Int64 { audioBytes + transcriptBytes + summaryBytes + otherBytes }
+
+    private func fraction(_ bytes: Int64) -> CGFloat {
+        guard totalBytes > 0 else { return 0 }
+        return CGFloat(bytes) / CGFloat(totalBytes)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(totalSize)
+                    .font(MonoFont.mono(size: 18, weight: .semibold))
+                if isLoaded {
+                    Text("· \(meetingCount) meetings · \(String(format: "%.1f", audioHours))h audio")
+                        .font(MonoFont.mono(size: TypeScale.sm))
+                        .foregroundStyle(MonoColors.textMuted)
+                }
+            }
+
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    Rectangle().fill(MonoColors.accent)
+                        .frame(width: geo.size.width * fraction(audioBytes))
+                    Rectangle().fill(MonoColors.accent.opacity(0.5))
+                        .frame(width: geo.size.width * fraction(transcriptBytes))
+                    Rectangle().fill(MonoColors.text.opacity(0.5))
+                        .frame(width: geo.size.width * fraction(summaryBytes))
+                    Rectangle().fill(MonoColors.text.opacity(0.25))
+                        .frame(width: geo.size.width * fraction(otherBytes))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+            }
+            .frame(height: 8)
+            .background(MonoColors.bgElev, in: RoundedRectangle(cornerRadius: 2))
+            .overlay(RoundedRectangle(cornerRadius: 2).stroke(MonoColors.divider, lineWidth: 1))
+
+            HStack(spacing: 12) {
+                diskLegend(MonoColors.accent, "audio", formatBytes(audioBytes))
+                diskLegend(MonoColors.accent.opacity(0.5), "transcripts", formatBytes(transcriptBytes))
+                diskLegend(MonoColors.text.opacity(0.5), "summaries", formatBytes(summaryBytes))
+                diskLegend(MonoColors.text.opacity(0.25), "other", formatBytes(otherBytes))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.md))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(MonoColors.divider, lineWidth: 1))
+        .task { await computeUsage() }
+    }
+
+    private func diskLegend(_ color: Color, _ label: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 8, height: 8)
+            Text("\(label) · \(value)")
+                .font(MonoFont.mono(size: 10.5))
+                .foregroundStyle(MonoColors.textMuted)
+        }
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func computeUsage() async {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let scribeDir = appSupport.appendingPathComponent("Scribe").path
+        let fm = FileManager.default
+
+        var audio: Int64 = 0, transcript: Int64 = 0, summary: Int64 = 0, other: Int64 = 0
+        var meetings = 0
+
+        if let enumerator = fm.enumerator(atPath: scribeDir) {
+            while let file = enumerator.nextObject() as? String {
+                let fullPath = (scribeDir as NSString).appendingPathComponent(file)
+                guard let attrs = try? fm.attributesOfItem(atPath: fullPath),
+                      let size = attrs[.size] as? Int64 else { continue }
+                let ext = (file as NSString).pathExtension.lowercased()
+                switch ext {
+                case "m4a", "wav", "mp3", "caf", "aac", "opus": audio += size
+                case "json" where file.contains("transcript"): transcript += size
+                case "json" where file.contains("summary"): summary += size
+                case "sqlite", "sqlite-wal", "sqlite-shm": other += size
+                default: other += size
+                }
+            }
+        }
+
+        // Count meetings from database
+        let allMeetings = (try? await MeetingStore.shared.getAllMeetings()) ?? []
+        meetings = allMeetings.count
+
+        let totalAudioHrs = Double(audio) / (16_000.0 * 3600.0)
+        let total = audio + transcript + summary + other
+
+        let formatted: String
+        if total > 1_000_000_000 { formatted = String(format: "%.1f GB", Double(total) / 1e9) }
+        else if total > 1_000_000 { formatted = String(format: "%.0f MB", Double(total) / 1e6) }
+        else { formatted = String(format: "%.0f KB", Double(total) / 1e3) }
+
+        await MainActor.run {
+            totalSize = total > 0 ? formatted : "< 1 MB"
+            meetingCount = meetings
+            audioHours = totalAudioHrs
+            audioBytes = max(audio, 1)
+            transcriptBytes = max(transcript, 1)
+            summaryBytes = max(summary, 1)
+            otherBytes = max(other, 1)
+            isLoaded = true
         }
     }
 }
@@ -165,23 +318,21 @@ private struct TranscriptionSettingsContent: View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSectionHeader(title: "Provider", icon: "text.bubble")
 
-            Picker("Transcription Provider", selection: $settings.transcriptionProvider) {
-                ForEach(TranscriptionProviderType.allCases) { p in
-                    Text(p.rawValue).tag(p)
-                }
-            }
-            .pickerStyle(.radioGroup)
+            MonoRadioList(
+                selection: $settings.transcriptionProvider,
+                options: TranscriptionProviderType.allCases.map { ($0.rawValue, $0) }
+            )
 
             Text(providerDescription)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
 
             Divider()
 
             SettingsSectionHeader(title: "API Key", icon: "key")
 
             SecureField("API key for \(settings.transcriptionProvider.rawValue)", text: $apiKeyInput)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(MonoTextFieldStyle())
                 .onAppear { loadKey() }
                 .onChange(of: settings.transcriptionProvider) { _ in
                     loadKey()
@@ -189,13 +340,14 @@ private struct TranscriptionSettingsContent: View {
                     keySaved = false
                 }
 
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.compact) {
                 Button("Save Key") {
                     let k = KeychainManager.shared.apiKeyForTranscriptionProvider(settings.transcriptionProvider)
                     try? KeychainManager.shared.set(k, value: apiKeyInput)
                     keySaved = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { keySaved = false }
                 }
+                .buttonStyle(MonoPrimaryButtonStyle())
                 .disabled(apiKeyInput.isEmpty)
 
                 Button("Test Connection") {
@@ -204,6 +356,7 @@ private struct TranscriptionSettingsContent: View {
                         connectionStatus = apiKeyInput.isEmpty ? .failed("No API key") : .success
                     }
                 }
+                .buttonStyle(MonoSecondaryButtonStyle())
                 .disabled(apiKeyInput.isEmpty)
 
                 Spacer()
@@ -211,14 +364,14 @@ private struct TranscriptionSettingsContent: View {
                 switch connectionStatus {
                 case .idle:
                     if keySaved {
-                        Label("Saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                        Label("Saved", systemImage: "checkmark.circle.fill").foregroundStyle(MonoColors.success).font(MonoFont.sans(size: TypeScale.sm))
                     }
                 case .testing:
                     ProgressView().controlSize(.small)
                 case .success:
-                    Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                    Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(MonoColors.success).font(MonoFont.sans(size: TypeScale.sm))
                 case .failed(let msg):
-                    Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red).font(.caption)
+                    Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(MonoColors.live).font(MonoFont.sans(size: TypeScale.sm))
                 }
             }
         }
@@ -254,16 +407,14 @@ private struct LLMSettingsContent: View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSectionHeader(title: "Provider", icon: "brain")
 
-            Picker("LLM Provider", selection: $settings.llmProvider) {
-                ForEach(LLMProviderType.allCases) { p in
-                    Text(p.rawValue).tag(p)
-                }
-            }
-            .pickerStyle(.radioGroup)
+            MonoRadioList(
+                selection: $settings.llmProvider,
+                options: LLMProviderType.allCases.map { ($0.rawValue, $0) }
+            )
 
             Text(providerDescription)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
 
             Divider()
 
@@ -272,19 +423,21 @@ private struct LLMSettingsContent: View {
                 SettingsSectionHeader(title: "API Key", icon: "key")
 
                 SecureField("API key for \(settings.llmProvider.rawValue)", text: $apiKeyInput)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(MonoTextFieldStyle())
                     .onAppear { loadKey() }
                     .onChange(of: settings.llmProvider) { _ in loadKey(); validationError = nil; connectionStatus = .idle }
 
                 if let error = validationError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.caption)
+                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(MonoColors.live).font(MonoFont.sans(size: TypeScale.sm))
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.compact) {
                     Button("Save Key") { saveKey() }
+                        .buttonStyle(MonoPrimaryButtonStyle())
                         .disabled(apiKeyInput.isEmpty)
 
                     Button("Test Connection") { testLLMConnection() }
+                        .buttonStyle(MonoSecondaryButtonStyle())
                         .disabled(apiKeyInput.isEmpty || isTesting)
 
                     Spacer()
@@ -295,21 +448,22 @@ private struct LLMSettingsContent: View {
             case .ollama:
                 SettingsSectionHeader(title: "Configuration", icon: "server.rack")
 
-                LabeledContent("Endpoint") {
+                MonoLabeledField(label: "Endpoint") {
                     TextField("http://localhost:11434", text: $settings.ollamaEndpoint)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(MonoTextFieldStyle())
                 }
-                LabeledContent("Model") {
+                MonoLabeledField(label: "Model") {
                     TextField("llama3", text: $settings.ollamaModel)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(MonoTextFieldStyle())
                 }
 
                 if let error = validationError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.caption)
+                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(MonoColors.live).font(MonoFont.sans(size: TypeScale.sm))
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.compact) {
                     Button("Test Connection") { testLLMConnection() }
+                        .buttonStyle(MonoSecondaryButtonStyle())
                         .disabled(isTesting)
                     Spacer()
                     connectionStatusView
@@ -318,26 +472,28 @@ private struct LLMSettingsContent: View {
             case .custom:
                 SettingsSectionHeader(title: "Custom Provider", icon: "server.rack")
 
-                LabeledContent("Endpoint") {
+                MonoLabeledField(label: "Endpoint") {
                     TextField("https://api.example.com/v1", text: $settings.customLLMEndpoint)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(MonoTextFieldStyle())
                 }
-                LabeledContent("Model") {
+                MonoLabeledField(label: "Model") {
                     TextField("gpt-4o", text: $settings.customLLMModel)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(MonoTextFieldStyle())
                 }
                 SecureField("API Key (optional)", text: $apiKeyInput)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(MonoTextFieldStyle())
                     .onAppear { apiKeyInput = KeychainManager.shared.get(.customLLMAPIKey) ?? "" }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.compact) {
                     Button("Save Key") {
                         try? KeychainManager.shared.set(.customLLMAPIKey, value: apiKeyInput)
                         LLMManager.shared.refresh()
                     }
+                    .buttonStyle(MonoPrimaryButtonStyle())
                     .disabled(settings.customLLMEndpoint.isEmpty)
 
                     Button("Test Connection") { testLLMConnection() }
+                        .buttonStyle(MonoSecondaryButtonStyle())
                         .disabled(settings.customLLMEndpoint.isEmpty || isTesting)
 
                     Spacer()
@@ -355,12 +511,12 @@ private struct LLMSettingsContent: View {
         case .testing:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Testing...").font(.caption).foregroundStyle(.secondary)
+                Text("Testing...").font(MonoFont.sans(size: TypeScale.sm)).foregroundStyle(MonoColors.textMuted)
             }
         case .success:
-            Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+            Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(MonoColors.success).font(MonoFont.sans(size: TypeScale.sm))
         case .failed(let msg):
-            Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red).font(.caption)
+            Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(MonoColors.live).font(MonoFont.sans(size: TypeScale.sm))
         }
     }
 
@@ -514,58 +670,62 @@ private struct CalendarSettingsContent: View {
             SettingsSectionHeader(title: "Google Calendar", icon: "calendar")
 
             if googleConnectionState == .connected {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .font(.system(size: 12))
+                        .foregroundStyle(MonoColors.success)
                     Text("Connected to Google Calendar")
+                        .font(MonoFont.sans(size: TypeScale.base))
+                        .foregroundStyle(MonoColors.text)
                 }
 
                 Button("Disconnect") { disconnectGoogle() }
-                    .foregroundStyle(.red)
+                    .buttonStyle(MonoPrimaryButtonStyle(danger: true))
             } else if googleConnectionState == .expired {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .font(.system(size: 12))
+                        .foregroundStyle(MonoColors.warn)
                     Text("Google Calendar token expired — will auto-refresh on next fetch")
-                        .foregroundStyle(.orange)
+                        .font(MonoFont.sans(size: TypeScale.sm))
+                        .foregroundStyle(MonoColors.warn)
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.compact) {
                     Button("Refresh Now") { refreshGoogle() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                        .buttonStyle(MonoPrimaryButtonStyle())
                     Button("Disconnect") { disconnectGoogle() }
-                        .foregroundStyle(.red)
-                        .controlSize(.small)
+                        .buttonStyle(MonoPrimaryButtonStyle(danger: true))
                 }
             } else {
                 Text("Connect your Google account to detect meetings from Google Calendar directly.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .font(MonoFont.sans(size: TypeScale.base))
+                    .foregroundStyle(MonoColors.textMuted)
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.compact) {
                     Button {
                         connectGoogle()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Image(systemName: "globe")
+                                .font(.system(size: 11))
                             Text("Sign in with Google")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(MonoPrimaryButtonStyle())
                     .disabled(isConnecting)
 
                     if isConnecting {
                         ProgressView().controlSize(.small)
-                        Text("Waiting for browser authorization...")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text("Waiting for browser authorization…")
+                            .font(MonoFont.sans(size: TypeScale.sm))
+                            .foregroundStyle(MonoColors.textMuted)
                     }
                 }
 
                 Text("Opens your browser to sign in. Scribe only requests read-only calendar access.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(MonoFont.sans(size: TypeScale.sm))
+                    .foregroundStyle(MonoColors.textFaint)
             }
 
             if !googleStatus.isEmpty {
@@ -573,42 +733,38 @@ private struct CalendarSettingsContent: View {
                     googleStatus,
                     systemImage: googleStatus.contains("Error") ? "xmark.circle.fill" : "checkmark.circle.fill"
                 )
-                .font(.caption)
-                .foregroundStyle(googleStatus.contains("Error") ? .red : .green)
+                .font(MonoFont.sans(size: TypeScale.sm))
+                .foregroundStyle(googleStatus.contains("Error") ? MonoColors.live : MonoColors.success)
             }
 
             // Advanced: custom OAuth client ID for forks
             Divider()
 
-            DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
-                VStack(alignment: .leading, spacing: 8) {
+            MonoDisclosure("Advanced", isExpanded: $showAdvanced) {
+                VStack(alignment: .leading, spacing: Spacing.compact) {
                     Text("For self-hosted or forked builds, you can use your own Google OAuth Client ID.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .font(MonoFont.sans(size: TypeScale.sm))
+                        .foregroundStyle(MonoColors.textFaint)
 
                     TextField("Custom OAuth Client ID (optional)", text: $customClientId)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.caption)
+                        .textFieldStyle(MonoTextFieldStyle())
 
                     if !customClientId.isEmpty {
                         Button("Save Custom Client ID") {
                             UserDefaults.standard.set(customClientId, forKey: "googleOAuthClientId")
                             googleStatus = "Custom client ID saved. Reconnect to use it."
                         }
-                        .controlSize(.small)
+                        .buttonStyle(MonoSecondaryButtonStyle())
                     }
                 }
-                .padding(.top, 4)
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
 
             Divider()
 
             SettingsSectionHeader(title: "Outlook Calendar", icon: "envelope")
             Text("Microsoft 365 / Outlook support is planned for a future release.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
+                .font(MonoFont.sans(size: TypeScale.base))
+                .foregroundStyle(MonoColors.textMuted)
         }
         .task {
             googleConnectionState = await CalendarManager.shared.googleConnectionStatus()
@@ -687,10 +843,11 @@ private struct PermissionsSettingsContent: View {
             Divider()
 
             Text("Some permissions require restarting Scribe after granting.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(MonoFont.sans(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.textFaint)
 
             Button("Open System Settings") { permissions.openSystemPreferences() }
+                .buttonStyle(MonoSecondaryButtonStyle())
         }
     }
 }
@@ -698,20 +855,29 @@ private struct PermissionsSettingsContent: View {
 private struct PermRow: View {
     let name: String; let icon: String; let desc: String; let granted: Bool; let action: () -> Void
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).font(.title3).foregroundStyle(granted ? .green : .secondary).frame(width: 28)
+        HStack(spacing: Spacing.standard) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(granted ? MonoColors.success : MonoColors.textMuted)
+                .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text(name).fontWeight(.medium)
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(name).font(MonoFont.sans(size: TypeScale.base, weight: .medium))
+                Text(desc).font(MonoFont.sans(size: TypeScale.sm)).foregroundStyle(MonoColors.textMuted)
             }
             Spacer()
             if granted {
-                Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                Label("Granted", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(MonoColors.success)
+                    .font(MonoFont.sans(size: TypeScale.sm))
             } else {
-                Button("Request") { action() }.buttonStyle(.bordered).controlSize(.small)
+                Button("Request") { action() }
+                    .buttonStyle(MonoSecondaryButtonStyle())
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, Spacing.standard)
+        .padding(.vertical, Spacing.compact)
+        .background(MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.md))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(MonoColors.border, lineWidth: 1))
     }
 }
 
@@ -729,20 +895,20 @@ private struct FontPickerRow: View {
                 .frame(width: 150, alignment: .leading)
 
             Text(option.displayName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.textMuted)
 
             Spacer()
 
             if isSelected {
                 Image(systemName: "checkmark")
-                    .font(.caption)
-                    .foregroundStyle(Color.accentColor)
+                    .font(MonoFont.sans(size: TypeScale.sm))
+                    .foregroundStyle(MonoColors.accent)
             }
         }
         .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, Spacing.compact)
+        .background(isSelected ? MonoColors.accentBg : Color.clear, in: RoundedRectangle(cornerRadius: Radius.md))
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
     }
@@ -755,7 +921,29 @@ private struct SettingsSectionHeader: View {
     let icon: String
 
     var body: some View {
-        Label(title, systemImage: icon)
-            .font(.headline)
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(MonoColors.textMuted)
+            Text(title)
+                .font(MonoFont.sans(size: TypeScale.lg, weight: .semibold))
+                .foregroundStyle(MonoColors.text)
+        }
+    }
+}
+
+/// Mono-styled labeled field (replaces SwiftUI LabeledContent which has heavy default styling)
+private struct MonoLabeledField<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: Spacing.standard) {
+            Text(label)
+                .font(MonoFont.mono(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.textMuted)
+                .frame(width: 80, alignment: .trailing)
+            content()
+        }
     }
 }

@@ -18,8 +18,9 @@ public struct SearchView: View {
             // Search bar
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MonoColors.textFaint)
                 TextField("Search across all meetings...", text: $query)
+                    .font(MonoFont.sans(size: TypeScale.md))
                     .textFieldStyle(.plain)
                     .onSubmit { performSearch() }
 
@@ -34,13 +35,14 @@ public struct SearchView: View {
                         results = []
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MonoColors.textFaint)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(10)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .background(MonoColors.bgElev, in: RoundedRectangle(cornerRadius: Radius.md))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(MonoColors.border, lineWidth: 1))
             .padding()
 
             Divider()
@@ -59,11 +61,14 @@ public struct SearchView: View {
                     ForEach(results) { result in
                         SearchResultRow(result: result)
                             .transition(.opacity)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                             .onTapGesture {
                                 selectedMeetingId = result.meetingId
                             }
                     }
                 }
+                .listStyle(.plain)
                 .animation(Anim.standard, value: results.count)
             }
         }
@@ -133,20 +138,20 @@ struct SearchResultRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(result.meetingTitle)
-                    .font(.headline)
+                    .font(MonoFont.sans(size: TypeScale.base, weight: .semibold))
                     .lineLimit(1)
                 Spacer()
                 SourceBadge(source: result.source)
             }
 
             Text(cleanSnippet(result.snippet))
-                .font(.body)
+                .font(MonoFont.sans(size: TypeScale.sm))
                 .lineLimit(3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MonoColors.textMuted)
 
             Text(formatDate(result.timestamp))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(MonoFont.mono(size: TypeScale.xs))
+                .foregroundStyle(MonoColors.textFaint)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -166,20 +171,23 @@ struct SourceBadge: View {
     let source: SearchResult.SearchSource
 
     var body: some View {
-        Text(source.rawValue)
-            .font(.caption2)
+        Text(badgeLabel)
+            .font(MonoFont.mono(size: TypeScale.xs, weight: .semibold))
+            .foregroundStyle(MonoColors.textMuted)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(badgeColor.opacity(0.15), in: Capsule())
-            .foregroundStyle(badgeColor)
+            .background(MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.sm))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(MonoColors.border, lineWidth: 1))
     }
 
-    private var badgeColor: Color {
+    private var badgeLabel: String {
         switch source {
-        case .transcript: return .blue
-        case .note: return .green
-        case .summary: return .purple
-        case .title: return .orange
+        case .transcript: return "~\(source.rawValue)"
+        case .note: return "·\(source.rawValue)"
+        case .summary: return "*\(source.rawValue)"
+        case .title: return "#\(source.rawValue)"
+        case .screen: return "◻\(source.rawValue)"
+        case .participant: return "@\(source.rawValue)"
         }
     }
 }

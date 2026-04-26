@@ -93,7 +93,7 @@ public actor MCPServer {
             }]
 
         case .currentStatus:
-            return ["status": "idle", "version": "0.2.0"]
+            return ["status": "idle", "version": "0.3.0"]
         }
     }
 

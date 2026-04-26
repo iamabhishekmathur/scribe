@@ -10,10 +10,7 @@ public struct LiveTranscriptView: View {
     @State private var searchQuery = ""
     @State private var hiddenSpeakers: Set<Int> = []
 
-    // Speaker color palette (for non-user speakers, 1-indexed)
-    private static let speakerColors: [Color] = [
-        .blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint
-    ]
+    // Speaker colors now use SpeakerColors.color(for:) from DesignTokens
 
     public init(meetingId: UUID) {
         self.meetingId = meetingId
@@ -57,21 +54,21 @@ public struct LiveTranscriptView: View {
             // Search bar
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(MonoFont.mono(size: TypeScale.sm))
+                    .foregroundStyle(MonoColors.textFaint)
                 TextField("Search transcript...", text: $searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.caption)
+                    .font(MonoFont.mono(size: TypeScale.sm))
                 if !searchQuery.isEmpty {
                     Text("\(filteredSegments.count) results")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(MonoFont.mono(size: TypeScale.xs))
+                        .foregroundStyle(MonoColors.textMuted)
                     Button {
                         searchQuery = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(MonoFont.mono(size: TypeScale.sm))
+                            .foregroundStyle(MonoColors.textFaint)
                     }
                     .buttonStyle(.plain)
                 }
@@ -91,17 +88,17 @@ public struct LiveTranscriptView: View {
                                 else { hiddenSpeakers.insert(idx) }
                             } label: {
                                 Text(name)
-                                    .font(.caption2)
+                                    .font(MonoFont.mono(size: TypeScale.xs))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(
-                                        isHidden ? Color.clear : colorForSpeaker(idx).opacity(0.15),
+                                        isHidden ? MonoColors.bgSubtle : MonoColors.accentBg,
                                         in: Capsule()
                                     )
                                     .overlay(
-                                        Capsule().strokeBorder(isHidden ? Color.secondary.opacity(0.3) : .clear, lineWidth: 1)
+                                        Capsule().strokeBorder(isHidden ? MonoColors.border : MonoColors.accentBorder, lineWidth: 1)
                                     )
-                                    .foregroundStyle(isHidden ? .secondary : colorForSpeaker(idx))
+                                    .foregroundStyle(isHidden ? MonoColors.textMuted : MonoColors.accentText)
                             }
                             .buttonStyle(.plain)
                         }
@@ -116,38 +113,27 @@ public struct LiveTranscriptView: View {
             // Transcript
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 4) {
+                    LazyVStack(spacing: 0) {
                         ForEach(filteredSegments) { segment in
-                            let isUser = segment.speakerIndex == 0
-                            HStack(alignment: .top, spacing: 0) {
-                                if isUser { Spacer(minLength: 40) }
-
-                                VStack(alignment: isUser ? .trailing : .leading, spacing: 1) {
-                                    Text(displayName(for: segment))
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(isUser ? .accentColor : colorForSpeaker(segment.speakerIndex))
-
-                                    highlightedText(segment.text, query: searchQuery)
-                                        .font(.caption)
-                                        .foregroundStyle(.primary)
-                                        .textSelection(.enabled)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            isUser ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08),
-                                            in: RoundedRectangle(cornerRadius: 8)
-                                        )
-                                }
-
-                                if !isUser { Spacer(minLength: 40) }
+                            // Compact grid row for overlay: speaker · text
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("\(displayName(for: segment).lowercased()) · \(ScribeDateFormatting.transcriptTime(segment.startTime))")
+                                    .font(MonoFont.mono(size: TypeScale.xs))
+                                    .foregroundStyle(MonoColors.textMuted)
+                                highlightedText(segment.text, query: searchQuery)
+                                    .font(MonoFont.sans(size: TypeScale.sm))
+                                    .foregroundStyle(MonoColors.text)
+                                    .textSelection(.enabled)
+                                    .lineSpacing(2)
                             }
+                            .padding(.horizontal, Spacing.standard)
+                            .padding(.vertical, 6)
                             .id(segment.id)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            .overlay(alignment: .bottom) {
+                                Rectangle().fill(MonoColors.divider).frame(height: 1)
+                            }
                         }
                     }
-                    .padding(.horizontal, Spacing.standard)
-                    .padding(.vertical, Spacing.compact)
                 }
                 .onChange(of: segments.count) { _ in
                     if autoScroll && searchQuery.isEmpty, let last = segments.last {
@@ -165,9 +151,9 @@ public struct LiveTranscriptView: View {
                 } label: {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(MonoColors.accent)
                         .padding(8)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .background(MonoColors.bgElev, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .padding(8)
@@ -200,7 +186,7 @@ public struct LiveTranscriptView: View {
             let attrStart = AttributedString.Index(range.lowerBound, within: result)
             let attrEnd = AttributedString.Index(range.upperBound, within: result)
             if let attrStart, let attrEnd {
-                result[attrStart..<attrEnd].backgroundColor = .yellow.opacity(0.3)
+                result[attrStart..<attrEnd].backgroundColor = MonoColors.accentBg
             }
             searchStart = range.upperBound
         }
@@ -241,8 +227,6 @@ public struct LiveTranscriptView: View {
     }
 
     private func colorForSpeaker(_ index: Int?) -> Color {
-        guard let index else { return .primary }
-        if index == 0 { return .accentColor }
-        return Self.speakerColors[(index - 1) % Self.speakerColors.count]
+        SpeakerColors.color(for: index)
     }
 }

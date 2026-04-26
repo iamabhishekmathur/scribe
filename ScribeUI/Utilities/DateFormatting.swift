@@ -52,6 +52,12 @@ public enum ScribeDateFormatting {
         return f
     }()
 
+    private static let weekdayDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f
+    }()
+
     // MARK: - Public API
 
     public static func time(_ date: Date) -> String {
@@ -108,6 +114,6 @@ public enum ScribeDateFormatting {
         if daysAgo < 7 {
             return weekdayFormatter.string(from: date)
         }
-        return weekdayTimeFormatter.string(from: date)
+        return weekdayDateFormatter.string(from: date)
     }
 }

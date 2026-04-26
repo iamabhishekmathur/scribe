@@ -137,6 +137,13 @@ public final class Database: Sendable {
             }
         }
 
+        migrator.registerMigration("v1_fts5_screen_contexts") { db in
+            try db.create(virtualTable: "screen_contexts_fts", using: FTS5()) { t in
+                t.synchronize(withTable: "screen_contexts")
+                t.column("extractedText")
+            }
+        }
+
         migrator.registerMigration("v2_speaker_profiles") { db in
             try db.create(table: "speaker_profiles") { t in
                 t.primaryKey("id", .text).notNull()

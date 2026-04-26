@@ -158,7 +158,7 @@ final class MCPToolHandler: Sendable {
         let meetings = try await MeetingStore.shared.getAllMeetings(limit: 1)
         let count = meetings.isEmpty ? 0 : try await MeetingStore.shared.getAllMeetings(limit: 10000).count
         return [
-            "version": "0.2.0",
+            "version": "0.3.0",
             "databasePath": dbPath,
             "meetingCount": count,
             "status": "running",

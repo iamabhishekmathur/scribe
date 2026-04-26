@@ -4,7 +4,7 @@ set -euo pipefail
 # ─── Configuration ───────────────────────────────────────────────
 APP_NAME="Scribe"
 BUNDLE_ID="com.scribe.app"
-VERSION="0.2.0"
+VERSION="0.3.0"
 BUILD_DIR=".build/release"
 APP_BUNDLE="${APP_NAME}.app"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"

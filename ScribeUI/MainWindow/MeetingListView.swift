@@ -11,7 +11,6 @@ public struct MeetingListView: View {
     let folders: [Folder]
     @State private var meetings: [MeetingRecord] = []
     @State private var upcomingEvents: [CalendarManager.UpcomingMeeting] = []
-    @State private var searchText = ""
 
     public init(selectedMeetingId: Binding<UUID?>, folderId: UUID?, folders: [Folder]) {
         self._selectedMeetingId = selectedMeetingId
@@ -20,23 +19,34 @@ public struct MeetingListView: View {
     }
 
     public var body: some View {
-        List(selection: $selectedMeetingId) {
-            // Upcoming section (only in All Meetings, not folder views)
-            if folderId == nil && !upcomingEvents.isEmpty {
-                Section {
-                    ForEach(upcomingEvents, id: \.id) { event in
-                        UpcomingEventRow(event: event)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
-                    }
-                } header: {
-                    Text("Coming up")
-                        .font(.system(.title2, design: .serif))
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                        .textCase(nil)
-                        .padding(.bottom, 4)
-                }
+        VStack(spacing: 0) {
+            // Design: header bar "MEETINGS · count" with filter/sort icons
+            HStack(spacing: 8) {
+                MonoSectionLabel("MEETINGS · \(meetings.count)")
+                Spacer()
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(MonoColors.divider).frame(height: 1)
+            }
+
+            List {
+                // Upcoming section (only in All Meetings, not folder views)
+                if folderId == nil && !upcomingEvents.isEmpty {
+                    Section {
+                        ForEach(upcomingEvents, id: \.id) { event in
+                            UpcomingEventRow(event: event)
+                                .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    } header: {
+                        MonoSectionLabel("UPCOMING · \(upcomingEvents.count)")
+                            .textCase(nil)
+                            .padding(.bottom, 4)
+                    }
+                }
 
             // Past meetings grouped by date
             if meetings.isEmpty && upcomingEvents.isEmpty {
@@ -47,26 +57,27 @@ public struct MeetingListView: View {
                         Section {
                             ForEach(dayMeetings) { meeting in
                                 PastMeetingRow(meeting: meeting, isSelected: selectedMeetingId == meeting.id)
-                                    .tag(meeting.id)
-                                    .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedMeetingId = meeting.id }
+                                    .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                                     .draggable(meeting.id.uuidString)
                                     .contextMenu {
                                         meetingContextMenu(for: meeting)
                                     }
                             }
                         } header: {
-                            Text(formatSectionDate(date))
-                                .font(.callout)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
+                            MonoSectionLabel(formatSectionDate(date).uppercased())
                                 .textCase(nil)
                         }
                     }
                 }
             }
         }
-        .listStyle(.sidebar)
-        .searchable(text: $searchText, prompt: "Filter meetings")
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(MonoColors.bg)
         .safeAreaInset(edge: .bottom) {
             if folderId == nil {
                 Button {
@@ -75,16 +86,16 @@ public struct MeetingListView: View {
                     NotificationCenter.default.post(name: .startNewMeeting, object: ["meetingId": meetingId, "title": title])
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.body)
+                        Image(systemName: "mic")
+                            .font(MonoFont.sans(size: TypeScale.md))
                         Text("Start new meeting")
-                            .font(.callout)
-                            .fontWeight(.medium)
+                            .font(MonoFont.mono(size: TypeScale.sm, weight: .semibold))
+                        KbdView("⌘N")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(.green.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-                    .foregroundStyle(.green)
+                    .background(MonoColors.accentBg, in: RoundedRectangle(cornerRadius: Radius.md))
+                    .foregroundStyle(MonoColors.accent)
                 }
                 .buttonStyle(ScribeButtonStyle())
                 .padding(.horizontal, 12)
@@ -101,6 +112,7 @@ public struct MeetingListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .meetingUpdated)) { _ in
             Task { await loadMeetings() }
         }
+        } // end VStack wrapper
     }
 
     // MARK: - Context Menu
@@ -147,42 +159,12 @@ public struct MeetingListView: View {
         }
     }
 
-    // MARK: - Upcoming
-
-    private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Coming up")
-                .font(.title2)
-                .fontWeight(.bold)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-            VStack(spacing: 0) {
-                ForEach(upcomingEvents, id: \.id) { event in
-                    UpcomingEventRow(event: event)
-
-                    if event.id != upcomingEvents.last?.id {
-                        Divider()
-                            .padding(.leading, 56)
-                    }
-                }
-            }
-            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal, 12)
-            .padding(.bottom, 16)
-        }
-    }
-
     // MARK: - Grouped Past Meetings
 
     private var groupedMeetings: [Date: [MeetingRecord]] {
-        let filtered = searchText.isEmpty ? meetings : meetings.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
-        }
         var groups: [Date: [MeetingRecord]] = [:]
         let cal = Calendar.current
-        for meeting in filtered {
+        for meeting in meetings {
             let day = cal.startOfDay(for: meeting.startTime)
             groups[day, default: []].append(meeting)
         }
@@ -195,15 +177,15 @@ public struct MeetingListView: View {
         VStack(spacing: 12) {
             Image(systemName: folderId != nil ? "folder" : "waveform.circle")
                 .font(.system(size: 36))
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(MonoColors.textFaint)
             Text(folderId != nil ? "No Meetings in Folder" : "No Meetings Yet")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+                .font(MonoFont.sans(size: TypeScale.md, weight: .medium))
+                .foregroundStyle(MonoColors.textMuted)
             Text(folderId != nil
                  ? "Drag meetings here or right-click a meeting\nto move it to this folder."
                  : "Start a recording from the menu bar\nor connect your calendar in Settings.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
+                .font(MonoFont.sans(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.textFaint)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -261,49 +243,57 @@ struct UpcomingEventRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Date badge
-            VStack(spacing: 0) {
-                Text(dayNumber)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                Text(dayName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 36)
+            // Monospace time label
+            Text(relativeTime)
+                .font(MonoFont.mono(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.textFaint)
+                .frame(width: 50, alignment: .trailing)
 
             // Accent bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(.blue)
-                .frame(width: 3, height: 36)
+            RoundedRectangle(cornerRadius: 1)
+                .fill(MonoColors.accent)
+                .frame(width: 2, height: 36)
 
             // Event info
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
-                    .font(.callout)
-                    .fontWeight(.medium)
+                    .font(MonoFont.sans(size: TypeScale.base, weight: .medium))
+                    .foregroundStyle(MonoColors.text)
                     .lineLimit(1)
                 Text(formatTime(event.startDate))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(MonoFont.mono(size: TypeScale.xs))
+                    .foregroundStyle(MonoColors.textFaint)
             }
 
             Spacer()
 
-            // Source badge
-            Image(systemName: "globe")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            // Source tag
+            MonoTag(sourceLabel.lowercased())
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isHovered ? Color.primary.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .background(isHovered ? MonoColors.bgHover : .clear, in: RoundedRectangle(cornerRadius: Radius.md))
         .onHover { isHovered = $0 }
         .animation(Anim.fast, value: isHovered)
     }
 
-    private var dayNumber: String { ScribeDateFormatting.dayNumber(event.startDate) }
-    private var dayName: String { ScribeDateFormatting.dayName(event.startDate) }
+    private var relativeTime: String {
+        let minutes = Int(event.startDate.timeIntervalSinceNow / 60)
+        if minutes < 0 { return formatTime(event.startDate) }
+        if minutes < 60 { return "+\(minutes)m" }
+        let hours = minutes / 60
+        return "+\(hours)h"
+    }
+
+    private var sourceLabel: String {
+        if let url = event.meetingURL?.lowercased() {
+            if url.contains("zoom") { return "zoom" }
+            if url.contains("meet.google") { return "meet" }
+            if url.contains("teams") { return "teams" }
+        }
+        return "cal"
+    }
+
     private func formatTime(_ date: Date) -> String { ScribeDateFormatting.time(date) }
 }
 
@@ -315,73 +305,67 @@ struct PastMeetingRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Date badge (same style as upcoming)
-            VStack(spacing: 0) {
-                Text(dayNumber)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                Text(dayName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 36)
+        HStack(spacing: 10) {
+            // Monospace time
+            Text(formatTime(meeting.startTime))
+                .font(MonoFont.mono(size: TypeScale.sm))
+                .foregroundStyle(isSelected ? MonoColors.accentText : MonoColors.textFaint)
+                .frame(width: 50, alignment: .trailing)
 
-            // Accent bar with icon fallback for colorblind users
-            ZStack {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(accentBarColor)
-                    .frame(width: 3, height: 36)
-            }
-            .accessibilityLabel(stateAccessibilityLabel)
+            // Accent bar with state color
+            RoundedRectangle(cornerRadius: 1)
+                .fill(accentBarColor)
+                .frame(width: 2, height: 34)
+                .accessibilityLabel(stateAccessibilityLabel)
 
             // Title + subtitle
             VStack(alignment: .leading, spacing: 2) {
-                Text(meeting.title)
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if meeting.state == "recording" {
+                        RecDot(size: 5, color: MonoColors.live)
+                    }
+                    Text(meeting.title)
+                        .font(MonoFont.sans(size: TypeScale.base, weight: .medium))
+                        .foregroundStyle(MonoColors.text)
+                        .lineLimit(1)
+                }
                 Text(subtitleText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(MonoFont.mono(size: TypeScale.xs))
+                    .foregroundStyle(MonoColors.textFaint)
                     .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            // State indicator with text (non-color fallback)
-            if meeting.state == "recording" {
-                HStack(spacing: 3) {
-                    Image(systemName: "record.circle")
-                        .font(.caption2)
-                    Text("Scribing")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.green)
-            } else if meeting.state == "processing" {
-                HStack(spacing: 3) {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.caption2)
-                    Text("Processing")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.orange)
+            // Duration on the right
+            if let duration = meeting.duration, duration > 0 {
+                Text(ScribeDateFormatting.duration(duration))
+                    .font(MonoFont.mono(size: TypeScale.xs))
+                    .foregroundStyle(isSelected ? MonoColors.accentText : MonoColors.textFaint)
+            } else if meeting.state == "recording" {
+                Text("scribing")
+                    .font(MonoFont.mono(size: TypeScale.xs))
+                    .foregroundStyle(MonoColors.live)
             }
-
-            // Time
-            Text(formatTime(meeting.startTime))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : (isHovered ? Color.primary.opacity(0.04) : .clear), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            isSelected ? MonoColors.accentBg : (isHovered ? MonoColors.bgHover : .clear),
+            in: RoundedRectangle(cornerRadius: Radius.md)
+        )
+        .overlay(alignment: .leading) {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(MonoColors.accent)
+                    .frame(width: 2)
+                    .padding(.vertical, 4)
+            }
+        }
         .onHover { isHovered = $0 }
         .animation(Anim.fast, value: isHovered)
+        .animation(Anim.fast, value: isSelected)
     }
-
-    private var dayNumber: String { ScribeDateFormatting.dayNumber(meeting.startTime) }
-    private var dayName: String { ScribeDateFormatting.dayName(meeting.startTime) }
 
     private var stateAccessibilityLabel: String {
         switch meeting.state {
@@ -394,25 +378,40 @@ struct PastMeetingRow: View {
 
     private var accentBarColor: Color {
         switch meeting.state {
-        case "recording": return .red
-        case "complete": return .green
-        case "processing": return .orange
-        default: return .secondary.opacity(0.4)
+        case "recording": return MonoColors.live
+        case "complete": return MonoColors.accent
+        case "processing": return MonoColors.warn
+        default: return MonoColors.textFaint.opacity(0.4)
         }
     }
 
     private var subtitleText: String {
+        var parts: [String] = []
+
+        // Folder name if available (kebab-case style)
+        // Duration or state
         if let duration = meeting.duration, duration > 0 {
             let mins = Int(duration) / 60
-            if mins < 1 { return "\(Int(duration))s" }
-            if mins < 60 { return "\(mins) min" }
-            return "\(mins / 60)h \(mins % 60)m"
+            if mins < 1 { parts.append("\(Int(duration))s") }
+            else if mins < 60 { parts.append("\(mins)m") }
+            else { parts.append("\(mins / 60)h\(mins % 60)m") }
+        } else {
+            switch meeting.state {
+            case "recording": parts.append("scribing…")
+            case "processing": parts.append("processing…")
+            default: parts.append(meeting.state)
+            }
         }
-        switch meeting.state {
-        case "recording": return "Scribing..."
-        case "processing": return "Processing..."
-        default: return meeting.state
+
+        // Speaker count from participants
+        if let participantsJSON = meeting.participants,
+           let data = participantsJSON.data(using: .utf8),
+           let names = try? JSONDecoder().decode([String].self, from: data),
+           !names.isEmpty {
+            parts.append("\(names.count)sp")
         }
+
+        return parts.joined(separator: " · ")
     }
 
     private func formatTime(_ date: Date) -> String { ScribeDateFormatting.time(date) }
@@ -426,11 +425,10 @@ struct MeetingStateBadge: View {
     var body: some View {
         HStack(spacing: 3) {
             if state == "recording" {
-                Circle().fill(.red).frame(width: 6, height: 6)
+                RecDot(size: 6, color: MonoColors.live)
             }
             Text(displayText)
-                .font(.caption2)
-                .fontWeight(.medium)
+                .font(MonoFont.mono(size: TypeScale.xs, weight: .semibold))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
@@ -450,11 +448,11 @@ struct MeetingStateBadge: View {
 
     private var badgeColor: Color {
         switch state {
-        case "recording": return .green
-        case "processing": return .orange
-        case "complete": return .secondary
-        case "ended": return .blue
-        default: return .secondary
+        case "recording": return MonoColors.live
+        case "processing": return MonoColors.warn
+        case "complete": return MonoColors.textMuted
+        case "ended": return MonoColors.accent
+        default: return MonoColors.textMuted
         }
     }
 }

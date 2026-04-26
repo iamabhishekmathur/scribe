@@ -48,7 +48,7 @@ public struct NoteInputView: View {
             HStack(spacing: 8) {
                 TextField("Add a note...", text: $noteText, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.caption)
+                    .font(MonoFont.sans(size: TypeScale.sm))
                     .lineLimit(1...3)
                     .focused($isInputFocused)
                     .onSubmit {
@@ -60,6 +60,7 @@ public struct NoteInputView: View {
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title3)
+                        .foregroundStyle(MonoColors.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(noteText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -95,10 +96,12 @@ public struct NoteInputView: View {
             isInputFocused = true
         } label: {
             Text(title)
-                .font(.caption2)
+                .font(MonoFont.mono(size: TypeScale.xs))
+                .foregroundStyle(MonoColors.text)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.secondary.opacity(0.12), in: Capsule())
+                .background(MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.sm))
+                .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(MonoColors.border, lineWidth: 1))
         }
         .buttonStyle(ScribeButtonStyle())
     }
@@ -109,19 +112,22 @@ public struct NoteInputView: View {
         VStack(alignment: .leading, spacing: 4) {
             TextField("Edit note...", text: $editText, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.caption)
+                .font(MonoFont.sans(size: TypeScale.sm))
                 .lineLimit(1...5)
 
             HStack(spacing: 8) {
                 Button("Save") { saveEdit(note) }
-                    .font(.caption2).buttonStyle(.borderedProminent).controlSize(.mini)
+                    .buttonStyle(MonoPrimaryButtonStyle())
+                    .controlSize(.mini)
                 Button("Cancel") { editingNoteId = nil }
-                    .font(.caption2).buttonStyle(.bordered).controlSize(.mini)
+                    .buttonStyle(MonoGhostButtonStyle())
+                    .controlSize(.mini)
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 6))
+        .background(MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.md))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(MonoColors.border, lineWidth: 1))
     }
 
     // MARK: - Actions
@@ -204,11 +210,12 @@ struct NoteRow: View {
         HStack(alignment: .top, spacing: 6) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(note.text)
-                    .font(.caption)
+                    .font(MonoFont.sans(size: TypeScale.sm))
+                    .foregroundStyle(MonoColors.text)
                     .textSelection(.enabled)
                 Text(formatTimestamp(note.timestamp))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(MonoFont.mono(size: TypeScale.xs))
+                    .foregroundStyle(MonoColors.textMuted)
             }
 
             Spacer()
@@ -217,16 +224,16 @@ struct NoteRow: View {
                 HStack(spacing: 4) {
                     Button { onEdit() } label: {
                         Image(systemName: "pencil")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(MonoFont.mono(size: TypeScale.xs))
+                            .foregroundStyle(MonoColors.textMuted)
                     }
                     .buttonStyle(.plain)
                     .help("Edit note")
 
                     Button { onDelete() } label: {
                         Image(systemName: "trash")
-                            .font(.caption2)
-                            .foregroundStyle(.red.opacity(0.7))
+                            .font(MonoFont.mono(size: TypeScale.xs))
+                            .foregroundStyle(MonoColors.live)
                     }
                     .buttonStyle(.plain)
                     .help("Delete note")
@@ -236,8 +243,8 @@ struct NoteRow: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .background(isHovered ? Color.primary.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: 6))
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 6))
+        .background(isHovered ? MonoColors.bgHover : MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.md))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(MonoColors.border, lineWidth: 1))
         .onHover { isHovered = $0 }
         .animation(Anim.fast, value: isHovered)
     }

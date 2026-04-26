@@ -199,7 +199,7 @@ public actor LocalAPIServer {
     private func handleStatus() async -> HTTPResponse {
         let data: [String: Any] = [
             "status": "running",
-            "version": "0.2.0",
+            "version": "0.3.0",
         ]
         return jsonResponse(data)
     }

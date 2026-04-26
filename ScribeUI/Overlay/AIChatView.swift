@@ -38,8 +38,8 @@ public struct AIChatView: View {
                                 ProgressView()
                                     .controlSize(.small)
                                 Text("Thinking...")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(MonoFont.mono(size: TypeScale.xs))
+                                    .foregroundStyle(MonoColors.textMuted)
                             }
                             .padding(.horizontal, 12)
                         }
@@ -62,7 +62,7 @@ public struct AIChatView: View {
             HStack(spacing: 8) {
                 TextField("Ask about the meeting...", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.caption)
+                    .font(MonoFont.sans(size: TypeScale.sm))
                     .lineLimit(1...3)
                     .focused($isInputFocused)
                     .onSubmit { sendMessage() }
@@ -72,6 +72,7 @@ public struct AIChatView: View {
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title3)
+                        .foregroundStyle(MonoColors.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
@@ -152,18 +153,18 @@ struct ChatBubble: View {
     let message: ChatMessage
 
     var body: some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 40) }
+        HStack(alignment: .top, spacing: 10) {
+            Text(message.role == .user ? "you ›" : "scribe")
+                .font(MonoFont.mono(size: TypeScale.xs, weight: .semibold))
+                .foregroundStyle(message.role == .user ? MonoColors.text : MonoColors.accent)
+                .frame(width: 44, alignment: .trailing)
+
             Text(message.content)
-                .font(.caption)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    message.role == .user ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.1),
-                    in: RoundedRectangle(cornerRadius: 10)
-                )
+                .font(MonoFont.sans(size: TypeScale.sm))
+                .foregroundStyle(MonoColors.text)
                 .textSelection(.enabled)
-            if message.role == .assistant { Spacer(minLength: 40) }
+                .lineSpacing(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -176,10 +177,12 @@ struct QuickActionButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.caption2)
+                .font(MonoFont.mono(size: TypeScale.xs))
+                .foregroundStyle(MonoColors.text)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(isHovered ? Color.primary.opacity(0.08) : Color.secondary.opacity(0.12), in: Capsule())
+                .background(isHovered ? MonoColors.bgHover : MonoColors.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.sm))
+                .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(MonoColors.border, lineWidth: 1))
         }
         .buttonStyle(ScribeButtonStyle())
         .onHover { isHovered = $0 }

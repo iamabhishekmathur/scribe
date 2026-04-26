@@ -30,46 +30,75 @@ Scribe works differently:
 - **Auto-detection** — detects when you join a Zoom meeting and prompts you to start recording.
 - **Dual audio capture** — mic (your voice) via AVAudioEngine + system audio (other participants) via ScreenCaptureKit.
 - **Real-time transcription** — streams audio to your configured provider with speaker diarization.
-- **AI summaries** — post-meeting debrief with overview, key discussion points, decisions, action items, and follow-ups.
+- **Structured AI summaries** — post-meeting debrief with structured rendering: topics as numbered rows, decisions as checkmark cards, action items with @mention highlighting and who/what/when columns.
+- **6 summary templates** — General, 1:1, Standup, Customer Call, Interview, Brainstorm — each generates sections tailored to the meeting type.
 - **Notes editor** — take notes during the meeting. Your notes are used by the AI to prioritize what matters to you.
-- **Real-time chat** — ask questions during the meeting ("what did I miss?", "what are they asking?") and get immediate, concise answers.
+- **Real-time chat** — ask questions during the meeting ("what did I miss?", "what are they asking?") and get immediate, concise answers with source citations.
+- **Speaker timeline** — visual horizontal bars showing who spoke when, color-coded per speaker.
+
+### Search & Navigation
+- **Command palette** (`⌘K`) — Raycast-style floating search with actions (start recording, toggle theme, open settings), recent meetings, and full-text search.
+- **Natural language search** — ask questions like "what did we decide about pricing?" — Scribe extracts keywords via your LLM, searches FTS, and synthesizes an AI answer.
+- **Search filters** — filter by source (transcripts, notes, summaries, screen context).
+- **Keyword highlighting** — matched terms highlighted in search results.
+- **Full-text search** — across transcripts, notes, summaries, and screen context (powered by SQLite FTS5).
+- **Chrome bar** — persistent top bar with breadcrumb navigation and recording status badge.
 
 ### Organization
 - **Folders** — create folders, drag meetings into them, right-click to move. One folder per meeting.
-- **Full-text search** — search across all transcripts, notes, and summaries (powered by SQLite FTS5).
+- **Starred & Archive** — mark important meetings, archive old ones to keep the list clean.
 - **Google Calendar** — see upcoming meetings in the menu bar and meeting list. OAuth 2.0 PKCE integration.
 
 ### Technical
 - **Local REST API** — `localhost:7777` with endpoints for meetings, transcripts, summaries, search, and status.
-- **JSON export** — auto-export each meeting as a JSON file.
+- **MCP server** — Model Context Protocol server for accessing meeting data from AI clients like Claude Code.
+- **Markdown export** — auto-export each meeting as a Markdown file.
 - **Configurable providers** — swap transcription and LLM providers without changing code.
 - **Screen context** — optionally captures periodic screenshots during screen share, extracts text via vision LLM, and feeds it into summaries and chat.
+- **Disk usage** — visual storage breakdown in Settings showing audio, transcripts, summaries, and other data.
 
-## Screenshots
+## Install
 
-*Coming soon.*
+### Download (recommended)
 
-## Getting Started
+1. Download the latest `.dmg` from [Releases](https://github.com/iamabhishekmathur/scribe/releases)
+2. Open the `.dmg` and drag **Scribe** to your **Applications** folder
+3. **Important:** Scribe is not notarized yet (no Apple Developer Program enrollment). macOS will block it on first launch. Run this command to remove the quarantine flag:
 
-### Prerequisites
+```bash
+xattr -cr /Applications/Scribe.app
+```
+
+4. Open Scribe from Applications. It will appear in your menu bar.
+
+> **Why is this needed?** macOS Gatekeeper quarantines apps downloaded from the internet that aren't notarized by Apple. The `xattr -cr` command removes the `com.apple.quarantine` extended attribute so macOS treats the app as trusted. This is standard for open-source macOS apps distributed outside the App Store.
+
+### Build from Source
+
+#### Prerequisites
 
 - **macOS 14+** (Sonoma or later)
 - **Xcode Command Line Tools** — `xcode-select --install`
 - A transcription API key (Deepgram, AssemblyAI, or OpenAI)
 - An LLM API key (Anthropic Claude, OpenAI, or a local Ollama instance)
 
-### Build and Run
-
 ```bash
 # Clone the repo
 git clone https://github.com/iamabhishekmathur/scribe.git
 cd scribe
 
-# Build
+# Build and run
 swift build
-
-# Run
 swift run Scribe
+```
+
+#### Build a .dmg for distribution
+
+```bash
+# Build release .app bundle and .dmg
+./scripts/build-dmg.sh
+
+# Output: .build/release/Scribe-0.3.0.dmg
 ```
 
 The app will appear in your menu bar. On first launch, it will walk you through:
@@ -217,11 +246,10 @@ Contributions are welcome! This is an early-stage project and there's plenty to 
 
 - **Meeting detection** — support for Google Meet, Microsoft Teams, Slack Huddles (currently Zoom only)
 - **Speaker identification** — persistent speaker profiles across meetings
-- **Export formats** — Notion, Markdown, PDF export
-- **MCP server** — Model Context Protocol for AI client integration
+- **Export formats** — Notion, PDF, JSON export
 - **Outlook Calendar** — Microsoft 365 calendar support
-- **Onboarding polish** — guided setup, permission troubleshooting
-- **App bundle** — proper .app with code signing for easier distribution
+- **Local transcription** — Whisper.cpp integration for fully offline transcription
+- **Notarization** — Apple Developer Program enrollment for signed distribution
 
 ## Tech Stack
 

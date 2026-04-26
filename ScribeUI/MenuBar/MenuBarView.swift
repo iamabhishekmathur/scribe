@@ -18,28 +18,35 @@ public struct MenuBarView: View {
             // Status header
             if coordinator.isRecording {
                 HStack(spacing: 6) {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text("Scribing").font(.headline)
+                    RecDot(size: 6, color: MonoColors.live)
+                    Text("RECORDING")
+                        .font(MonoFont.mono(size: TypeScale.xs, weight: .bold))
+                        .foregroundStyle(MonoColors.live)
                     Spacer()
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
 
-                Button("Stop Scribing") {
+                Button {
                     appState.stopRecording()
                     Task {
                         await coordinator.stopRecording()
                         await MainActor.run { appState.finishProcessing() }
                     }
+                } label: {
+                    Text("Stop Scribing")
+                        .font(MonoFont.sans(size: TypeScale.sm, weight: .medium))
                 }
+                .buttonStyle(MonoPrimaryButtonStyle(danger: true))
                 .padding(.horizontal, 12)
             } else {
                 HStack(spacing: 6) {
-                    Text("Scribe")
-                        .font(.headline)
-                    Text("Idle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("scribe")
+                        .font(MonoFont.sans(size: TypeScale.md, weight: .semibold))
+                        .foregroundStyle(MonoColors.text)
+                    Text("idle")
+                        .font(MonoFont.mono(size: TypeScale.xs))
+                        .foregroundStyle(MonoColors.textFaint)
                     Spacer()
                 }
                 .padding(.horizontal, 12)
@@ -50,9 +57,7 @@ public struct MenuBarView: View {
 
             // Upcoming meetings
             if !upcomingEvents.isEmpty {
-                Text("Upcoming")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                MonoSectionLabel("UPCOMING")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -63,11 +68,12 @@ public struct MenuBarView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(event.title)
-                                .font(.callout)
+                                .font(MonoFont.sans(size: TypeScale.sm))
+                                .foregroundStyle(MonoColors.text)
                                 .lineLimit(1)
                             Text(formatEventTime(event.startDate))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(MonoFont.mono(size: TypeScale.xs))
+                                .foregroundStyle(MonoColors.textMuted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -81,7 +87,7 @@ public struct MenuBarView: View {
             }
 
             if !coordinator.isRecording {
-                Button("Start Scribing") {
+                Button {
                     let meetingId = UUID()
                     let title = "Meeting \(formattedDate)"
                     appState.startRecording(meetingId: meetingId)
@@ -93,27 +99,37 @@ public struct MenuBarView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         NotificationCenter.default.post(name: .openMeeting, object: meetingId)
                     }
+                } label: {
+                    Text("Start Scribing")
+                        .font(MonoFont.sans(size: TypeScale.sm, weight: .medium))
                 }
+                .buttonStyle(MonoPrimaryButtonStyle())
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
             }
 
             Divider()
 
-            Button("Open Scribe") {
+            Button {
                 NotificationCenter.default.post(name: .openMainWindow, object: nil)
+            } label: {
+                Text("Open Scribe")
+                    .font(MonoFont.sans(size: TypeScale.sm))
             }
             .keyboardShortcut("o")
 
-            Button("Settings...") {
+            Button {
                 NotificationCenter.default.post(name: .openMainWindow, object: nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
                 }
+            } label: {
+                Text("Settings...")
+                    .font(MonoFont.sans(size: TypeScale.sm))
             }
             .keyboardShortcut(",")
 
-            Button("Check for Updates...") {
+            Button {
                 Task {
                     if let release = await UpdateChecker.shared.checkForUpdate() {
                         await MainActor.run {
@@ -140,12 +156,18 @@ public struct MenuBarView: View {
                         }
                     }
                 }
+            } label: {
+                Text("Check for Updates...")
+                    .font(MonoFont.sans(size: TypeScale.sm))
             }
 
             Divider()
 
-            Button("Quit Scribe") {
+            Button {
                 NSApp.terminate(nil)
+            } label: {
+                Text("Quit Scribe")
+                    .font(MonoFont.sans(size: TypeScale.sm))
             }
             .keyboardShortcut("q")
         }

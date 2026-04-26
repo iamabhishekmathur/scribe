@@ -19,16 +19,37 @@ struct OverlayContentView: View {
             overlayHeader
 
             // Tab bar
-            Picker("", selection: $selectedTab) {
+            HStack(spacing: 0) {
                 ForEach(OverlayTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    let isActive = selectedTab == tab
+                    Button {
+                        withAnimation(Anim.fast) { selectedTab = tab }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: tab == .transcript ? "waveform" : (tab == .notes ? "pencil" : "sparkles"))
+                                .font(.system(size: 10))
+                                .foregroundStyle(isActive ? MonoColors.accent : MonoColors.textFaint)
+                            Text(tab.rawValue.lowercased())
+                                .font(MonoFont.mono(size: 10.5, weight: isActive ? .semibold : .regular))
+                                .foregroundStyle(isActive ? MonoColors.text : MonoColors.textFaint)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(isActive ? MonoColors.accentBg : .clear, in: RoundedRectangle(cornerRadius: Radius.sm))
+                        .padding(.horizontal, 4)
+                        .overlay(alignment: .bottom) {
+                            if isActive {
+                                Rectangle().fill(MonoColors.accent).frame(height: 2)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Spacing.standard)
-            .padding(.vertical, 6)
-
-            Divider()
+            .padding(.horizontal, 4)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(MonoColors.divider).frame(height: 1)
+            }
 
             // Content
             switch selectedTab {
@@ -41,22 +62,20 @@ struct OverlayContentView: View {
             }
         }
         .frame(minWidth: 280, minHeight: 300)
-        .background(.ultraThinMaterial)
+        .background(MonoColors.bgElev)
     }
 
     private var overlayHeader: some View {
         HStack {
-            Circle()
-                .fill(.red)
-                .frame(width: 8, height: 8)
+            RecDot(size: 6, color: MonoColors.live)
                 .accessibilityHidden(true)
-            Text("Recording")
-                .font(.caption)
-                .fontWeight(.medium)
+            Text("REC")
+                .font(MonoFont.mono(size: TypeScale.xs, weight: .bold))
+                .foregroundStyle(MonoColors.live)
             Spacer()
             Text(timerText)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .font(MonoFont.mono(size: TypeScale.xs))
+                .foregroundStyle(MonoColors.textMuted)
         }
         .padding(.horizontal, Spacing.standard)
         .padding(.top, Spacing.compact)

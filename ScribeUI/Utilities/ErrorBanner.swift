@@ -9,23 +9,32 @@ struct ErrorBanner: ViewModifier {
             if let message {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.white)
+                        .foregroundStyle(MonoColors.live)
                     Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.white)
+                        .font(MonoFont.mono(size: TypeScale.sm, weight: .semibold))
+                        .foregroundStyle(MonoColors.text)
                     Spacer()
                     Button {
                         withAnimation(Anim.fast) { self.message = nil }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(MonoFont.mono(size: TypeScale.xs))
+                            .foregroundStyle(MonoColors.textMuted)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(.red.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                .background(MonoColors.bgElev, in: RoundedRectangle(cornerRadius: Radius.md))
+                .overlay(
+                    HStack {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(MonoColors.live)
+                            .frame(width: 3)
+                        Spacer()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+                )
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
                 .transition(.move(edge: .top).combined(with: .opacity))

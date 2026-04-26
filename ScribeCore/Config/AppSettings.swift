@@ -24,6 +24,7 @@ public final class AppSettings: ObservableObject {
         static let defaultTemplate = "defaultTemplate"
         static let meetingStoragePath = "meetingStoragePath"
         static let contentFont = "contentFont"
+        static let appearance = "appearance"
     }
 
     @Published public var transcriptionProvider: TranscriptionProviderType {
@@ -94,6 +95,11 @@ public final class AppSettings: ObservableObject {
         didSet { defaults.set(contentFont, forKey: Keys.contentFont) }
     }
 
+    /// Appearance mode: "system", "dark", "light"
+    @Published public var appearance: String {
+        didSet { defaults.set(appearance, forKey: Keys.appearance) }
+    }
+
     /// Resolved URL for meeting storage folder
     public var meetingStorageURL: URL {
         if meetingStoragePath.isEmpty {
@@ -127,6 +133,7 @@ public final class AppSettings: ObservableObject {
         self.defaultTemplateId = defaults.string(forKey: Keys.defaultTemplate) ?? "general"
         self.meetingStoragePath = defaults.string(forKey: Keys.meetingStoragePath) ?? ""
         self.contentFont = defaults.string(forKey: Keys.contentFont) ?? "System Serif"
+        self.appearance = defaults.string(forKey: Keys.appearance) ?? "system"
     }
 }
 
