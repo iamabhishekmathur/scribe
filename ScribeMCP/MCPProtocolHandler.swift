@@ -27,7 +27,7 @@ final class MCPProtocolHandler: Sendable {
                 ] as [String: Any],
                 "serverInfo": [
                     "name": "scribe",
-                    "version": "0.3.0",
+                    "version": "0.3.1",
                 ] as [String: Any],
             ])
 
